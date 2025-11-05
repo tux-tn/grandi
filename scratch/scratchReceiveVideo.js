@@ -13,18 +13,21 @@
   limitations under the License.
 */
 
-const g = require("../index.js");
+const g = require("../dist/index.cjs");
 
 async function run() {
 	const f = await g.find({});
+	f.wait(500)
 	let l = f.sources();
 	console.log(">>> FOUND >>>", l);
-	let r = await g.receive({ source: l[0] });
+	let r = await g.receive({ source: l[0], allowVideoFields: true });
 	console.log(">>> RECEIVER >>>", r);
-	for (let x = 0; x < 10; x++) {
-		let v = await r.video();
+	for (let x = 0; x < 1000; x++) {
+		let v = await r.data();
+		if(v.type === 'video') {
 		console.log(">>> VIDEO >>>", v);
 		console.log(process.memoryUsage());
+		}
 		v = null;
 	}
 	l = null;

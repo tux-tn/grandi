@@ -1,6 +1,7 @@
 build
 node_modules
 ndi
+dist
 .vscode
 .DS_Store
 pnpm-lock.yaml

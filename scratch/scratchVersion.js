@@ -13,6 +13,6 @@
   limitations under the License.
 */
 
-const g = require("../index.js");
+const g = require("../dist/index.cjs");
 
 console.log(g.version());

@@ -10,9 +10,18 @@
 		"device",
 		"interface"
 	],
-	"author": "Tux-TN",
+	"author": "Sarhan Aissi <npm@tux.tn>",
 	"license": "Apache-2.0",
-	"main": "index.js",
+	"files": [
+		"dist"
+	],
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"exports": {
+		".": "./dist/index.mjs",
+		"./package.json": "./package.json"
+	},
 	"gypfile": true,
 	"repository": {
 		"type": "git",
@@ -32,10 +41,19 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.3",
-		"shx": "0.3.4"
+		"@types/bindings": "^1.5.5",
+		"@types/cross-zip": "^4.0.2",
+		"@types/node": "^24.10.0",
+		"@types/shelljs": "^0.8.17",
+		"@types/tmp": "^0.2.6",
+		"shx": "0.3.4",
+		"tsdown": "^0.16.0",
+		"typescript": "^5.9.3"
 	},
 	"scripts": {
-		"install": "node ndi.mjs",
+		"install": "node dist/install.mjs",
+		"build:ts": "tsdown",
+		"prepare": "npm run build:ts || true",
 		"build": "node-gyp rebuild",
 		"build:linux-arm": "CXX=arm-linux-gnueabihf-g++ node-gyp rebuild --arch\"arm\" --target_arch=\"arm\"",
 		"build:linux-arm64": "CXX=aarch64-linux-gnu-g++ node-gyp rebuild --arch\"arm64\" --target_arch=\"arm64\"",

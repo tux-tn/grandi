@@ -13,7 +13,7 @@
   limitations under the License.
 */
 
-const g = require("../index.js");
+const g = require("../dist/index.cjs");
 
 async function run() {
 	const f = await g.find({});
