@@ -2,12 +2,7 @@
   "variables": {
     "ndi_dir": "<(module_root_dir)/ndi",
     "ndi_include_dir": "<(ndi_dir)/include",
-    "product_dir": "<(PRODUCT_DIR)",
-    "ndi_license_files": [
-      "<(ndi_dir)/lib/LICENSE",
-      "<(ndi_dir)/lib/libndi_licenses.txt",
-      "<(ndi_dir)/lib/NDI SDK License Agreement.pdf"
-    ]
+    "product_dir": "<(PRODUCT_DIR)"
   },
   "targets": [
     {
@@ -26,7 +21,9 @@
       "copies": [
         {
           "destination": "<(product_dir)",
-          "files": "<(ndi_license_files)"
+          "files": [
+            "<(ndi_dir)/lib/libndi_licenses.txt"
+          ]
         }
       ],
       "conditions": [
@@ -37,7 +34,8 @@
               {
                 "destination": "<(product_dir)",
                 "files": [
-                  "<(ndi_dir)/lib/win-x86/Processing.NDI.Lib.x86.dll"
+                  "<(ndi_dir)/lib/win-x86/Processing.NDI.Lib.x86.dll",
+                  "<(ndi_dir)/lib/NDI SDK License Agreement.pdf"
                 ]
               }
             ],
@@ -58,7 +56,8 @@
               {
                 "destination": "<(product_dir)",
                 "files": [
-                  "<(ndi_dir)/lib/win-x64/Processing.NDI.Lib.x64.dll"
+                  "<(ndi_dir)/lib/win-x64/Processing.NDI.Lib.x64.dll",
+                  "<(ndi_dir)/lib/NDI SDK License Agreement.pdf"
                 ]
               }
             ],
@@ -80,7 +79,8 @@
                 "destination": "<(product_dir)",
                 "files": [
                   "<(ndi_dir)/lib/lnx-x86/libndi.so",
-                  "<(ndi_dir)/lib/lnx-x86/libndi.so.6"
+                  "<(ndi_dir)/lib/lnx-x86/libndi.so.6",
+                  "<(ndi_dir)/lib/LICENSE"
                 ]
               }
             ],
@@ -103,7 +103,8 @@
                 "destination": "<(product_dir)",
                 "files": [
                   "<(ndi_dir)/lib/lnx-x64/libndi.so",
-                  "<(ndi_dir)/lib/lnx-x64/libndi.so.6"
+                  "<(ndi_dir)/lib/lnx-x64/libndi.so.6",
+                  "<(ndi_dir)/lib/LICENSE"
                 ]
               }
             ],
@@ -126,7 +127,8 @@
                 "destination": "<(product_dir)",
                 "files": [
                   "<(ndi_dir)/lib/lnx-armv7l/libndi.so",
-                  "<(ndi_dir)/lib/lnx-armv7l/libndi.so.6"
+                  "<(ndi_dir)/lib/lnx-armv7l/libndi.so.6",
+                  "<(ndi_dir)/lib/LICENSE"
                 ]
               }
             ],
@@ -149,7 +151,8 @@
                 "destination": "<(product_dir)",
                 "files": [
                   "<(ndi_dir)/lib/lnx-arm64/libndi.so",
-                  "<(ndi_dir)/lib/lnx-arm64/libndi.so.6"
+                  "<(ndi_dir)/lib/lnx-arm64/libndi.so.6",
+                  "<(ndi_dir)/lib/LICENSE"
                 ]
               }
             ],
@@ -171,7 +174,8 @@
               {
                 "destination": "<(product_dir)",
                 "files": [
-                  "<(ndi_dir)/lib/mac_universal/libndi.dylib"
+                  "<(ndi_dir)/lib/mac_universal/libndi.dylib",
+                  "<(ndi_dir)/lib/NDI SDK License Agreement.pdf"
                 ]
               }
             ],
