@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import readline from "node:readline";
 import { pipeline } from "node:stream/promises";
 import zip from "cross-zip";
 import { execa } from "execa";
-import got from "got";
+import got, { type Progress } from "got";
 import shell from "shelljs";
 import tmp from "tmp";
 
@@ -13,15 +14,170 @@ tmp.setGracefulCleanup();
 
 const platform = os.platform();
 const arch = os.arch();
+const supportsColor = process.stdout.isTTY && process.env.NO_COLOR !== "1";
+const isInteractiveTerminal = process.stdout.isTTY && process.env.CI !== "true";
 
-async function downloadToFile(url: string, outFile?: string): Promise<string> {
-	const filePath = outFile ?? tmp.tmpNameSync({});
-	const stream = got.stream(url, {
+const color = (open: string) => (value: string) =>
+	supportsColor ? `${open}${value}\x1b[0m` : value;
+
+const colors = {
+	cyan: color("\x1b[36m"),
+	magenta: color("\x1b[35m"),
+	green: color("\x1b[32m"),
+	yellow: color("\x1b[33m"),
+	red: color("\x1b[31m"),
+	gray: color("\x1b[90m"),
+	bold: color("\x1b[1m"),
+};
+
+const icons = {
+	heading: colors.bold("=="),
+	info: colors.cyan("[i]"),
+	step: colors.magenta("[>]"),
+	success: colors.green("[ok]"),
+	warn: colors.yellow("[!]"),
+	error: colors.red("[x]"),
+};
+
+const log = {
+	heading: (message: string) =>
+		console.log(`${icons.heading} ${colors.bold(message)}`),
+	info: (message: string) => console.log(`${icons.info} ${message}`),
+	step: (message: string) => console.log(`${icons.step} ${message}`),
+	success: (message: string) => console.log(`${icons.success} ${message}`),
+	warn: (message: string) => console.warn(`${icons.warn} ${message}`),
+	error: (message: string) => console.error(`${icons.error} ${message}`),
+};
+
+type DownloadOptions =
+	| string
+	| {
+			outFile?: string;
+			label?: string;
+	  };
+
+function formatBytes(bytes: number): string {
+	if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+	const units = ["B", "KB", "MB", "GB", "TB"];
+	let value = bytes;
+	let unitIndex = 0;
+	while (value >= 1024 && unitIndex < units.length - 1) {
+		value /= 1024;
+		unitIndex++;
+	}
+	const precision = value >= 10 || unitIndex === 0 ? 0 : 1;
+	return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function deriveLabelFromUrl(url: string): string {
+	try {
+		const parsed = new URL(url);
+		const base = path.basename(parsed.pathname);
+		return base.length > 0 ? decodeURIComponent(base) : url;
+	} catch {
+		return url;
+	}
+}
+
+function clearProgressLine(): void {
+	if (!isInteractiveTerminal) return;
+	readline.cursorTo(process.stdout, 0);
+	readline.clearLine(process.stdout, 0);
+}
+
+function createDownloadTracker(label: string) {
+	let progressRendered = false;
+	const prefix = `${colors.cyan("[dl]")} ${label}`;
+
+	const render = (details: string) => {
+		if (!isInteractiveTerminal) return;
+		readline.cursorTo(process.stdout, 0);
+		readline.clearLine(process.stdout, 0);
+		process.stdout.write(`${prefix} ${details}`);
+		progressRendered = true;
+	};
+
+	return {
+		start() {
+			log.step(`Downloading ${label}`);
+		},
+		update(progress: Progress) {
+			if (!isInteractiveTerminal) return;
+			const percent =
+				typeof progress.percent === "number" &&
+				Number.isFinite(progress.percent)
+					? Math.min(progress.percent * 100, 100)
+					: null;
+			const transferred = formatBytes(progress.transferred);
+			const total =
+				typeof progress.total === "number" && progress.total > 0
+					? formatBytes(progress.total)
+					: null;
+			const parts = [];
+			if (percent !== null) {
+				parts.push(`${percent.toFixed(1)}%`);
+			}
+			parts.push(total ? `${transferred}/${total}` : transferred);
+			render(parts.join(" • "));
+		},
+		finish() {
+			if (progressRendered) {
+				clearProgressLine();
+			}
+			log.success(`Downloaded ${label}`);
+		},
+		fail(err: unknown) {
+			if (progressRendered) {
+				clearProgressLine();
+			}
+			const message =
+				err instanceof Error
+					? err.message
+					: err
+						? String(err)
+						: "Unknown error";
+			log.error(`Failed to download ${label}: ${message}`);
+		},
+	};
+}
+
+async function downloadToFile(
+	url: string,
+	options: DownloadOptions = {},
+): Promise<string> {
+	let outFile: string | undefined;
+	let label: string | undefined;
+
+	if (typeof options === "string") {
+		outFile = options;
+	} else if (options && typeof options === "object") {
+		outFile = options.outFile;
+		label = options.label;
+	}
+
+	const filePath = outFile ?? tmp.tmpNameSync();
+	const tracker = createDownloadTracker(label ?? deriveLabelFromUrl(url));
+
+	tracker.start();
+	const downloadStream = got.stream(url, {
 		retry: { limit: 3 },
 		timeout: { request: 60_000 },
-	}) as unknown as NodeJS.ReadableStream;
-	await pipeline(stream, fs.createWriteStream(filePath));
-	return filePath;
+	});
+	downloadStream.on("downloadProgress", (progress) => {
+		tracker.update(progress);
+	});
+
+	try {
+		await pipeline(
+			downloadStream as unknown as NodeJS.ReadableStream,
+			fs.createWriteStream(filePath),
+		);
+		tracker.finish();
+		return filePath;
+	} catch (error) {
+		tracker.fail(error);
+		throw error;
+	}
 }
 
 function ndiSubsetPresent(): boolean {
@@ -47,48 +203,48 @@ function ndiSubsetPresent(): boolean {
 }
 
 async function main() {
-	if (
-		!(
-			platform === "darwin" ||
-			platform === "linux" ||
-			(platform === "win32" && ["ia32", "x64"].includes(arch))
-		)
-	) {
+	log.heading("NDI SDK bootstrap");
+	log.info(`Detected platform: ${platform}/${arch}`);
+
+	const supportedPlatform =
+		platform === "darwin" ||
+		platform === "linux" ||
+		(platform === "win32" && ["ia32", "x64"].includes(arch));
+
+	if (!supportedPlatform) {
+		log.warn("Current platform is not supported; skipping NDI SDK setup.");
 		return;
 	}
 
 	const forceRebuild = process.env.NDI_FORCE?.toString() === "1";
 	if (!forceRebuild && ndiSubsetPresent()) {
-		console.log(
-			"++ NDI SDK subset already present; skipping re-assembly (set NDI_FORCE=1 to force)",
+		log.success(
+			"NDI SDK subset already present; skipping re-assembly (set NDI_FORCE=1 to force)",
 		);
 	} else {
-		// clean existing ndi directory if any
-		console.log("++ Cleaning existing NDI SDK and build if any");
+		log.step("Cleaning existing NDI SDK and build artifacts");
 		shell.rm("-rf", "ndi");
 		shell.rm("-rf", "build");
-		console.log(
-			"++ Assembling NDI SDK distribution subset from official packages",
-		);
-		console.log(
-			"++ The NDI SDK license available at: https://ndi.link/ndisdk_license",
-		);
+		log.heading("Assembling NDI SDK distribution subset");
+		log.info("NDI SDK license: https://ndi.link/ndisdk_license");
 
 		if (platform === "win32") {
 			const innoUrl =
 				"https://constexpr.org/innoextract/files/innoextract-1.9-windows.zip";
-			console.log("-- downloading innoextract utility");
-			const innoZip = await downloadToFile(innoUrl);
+			const innoZip = await downloadToFile(innoUrl, {
+				label: "Innoextract utility (Windows)",
+			});
 
-			console.log("-- extracting innoextract utility");
+			log.step("Extracting innoextract utility");
 			const innoDir = tmp.tmpNameSync();
 			zip.unzipSync(innoZip, innoDir);
 
 			const ndiUrl = "https://downloads.ndi.tv/SDK/NDI_SDK/NDI 6 SDK.exe";
-			console.log("-- downloading NDI SDK distribution");
-			const ndiExe = await downloadToFile(ndiUrl);
+			const ndiExe = await downloadToFile(ndiUrl, {
+				label: "NDI SDK distribution (Windows)",
+			});
 
-			console.log("-- extracting NDI SDK distribution");
+			log.step("Extracting NDI SDK distribution");
 			const extractDir = tmp.tmpNameSync();
 			shell.mkdir("-p", extractDir);
 			await execa(
@@ -97,7 +253,7 @@ async function main() {
 				{ stdio: "inherit" },
 			);
 
-			console.log("-- assembling NDI SDK subset");
+			log.step("Assembling Windows NDI SDK subset");
 			shell.rm("-rf", "ndi");
 			shell.mkdir("-p", ["ndi/include", "ndi/lib/win-x86", "ndi/lib/win-x64"]);
 			shell.cp(path.join(extractDir, "app/Include/*.h"), "ndi/include/");
@@ -121,7 +277,7 @@ async function main() {
 				path.join(extractDir, "app/NDI SDK License Agreement.pdf"),
 				"ndi/lib/NDI SDK License Agreement.pdf",
 			);
-			console.log("-- removing temporary files");
+			log.step("Removing temporary files");
 			shell.rm("-f", innoZip);
 			shell.rm("-f", ndiExe);
 			shell.rm("-rf", innoDir);
@@ -129,10 +285,11 @@ async function main() {
 		} else if (platform === "darwin") {
 			const pkgUrl =
 				"https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg";
-			console.log("-- downloading NDI SDK distribution");
-			const pkgFile = await downloadToFile(pkgUrl);
+			const pkgFile = await downloadToFile(pkgUrl, {
+				label: "NDI SDK distribution (macOS)",
+			});
 
-			console.log("-- extracting NDI SDK distribution");
+			log.step("Extracting NDI SDK distribution");
 			const workDir = tmp.tmpNameSync();
 			shell.rm("-rf", workDir);
 			await execa("pkgutil", ["--expand", pkgFile, workDir], {
@@ -147,7 +304,7 @@ async function main() {
 				},
 			);
 
-			console.log("-- assembling NDI SDK subset");
+			log.step("Assembling macOS NDI SDK subset");
 			shell.rm("-rf", "ndi");
 			shell.mkdir("-p", ["ndi/include", "ndi/lib/mac_universal"]);
 			shell.mv(
@@ -167,16 +324,17 @@ async function main() {
 				"ndi/lib/LICENSE.pdf",
 			);
 
-			console.log("-- removing temporary files");
+			log.step("Removing temporary files");
 			shell.rm("-f", pkgFile);
 			shell.rm("-rf", workDir);
 		} else if (platform === "linux") {
 			const tarUrl =
 				"https://downloads.ndi.tv/SDK/NDI_SDK_Linux/Install_NDI_SDK_v6_Linux.tar.gz";
-			console.log("-- downloading NDI SDK distribution");
-			const tarFile = await downloadToFile(tarUrl);
+			const tarFile = await downloadToFile(tarUrl, {
+				label: "NDI SDK distribution (Linux)",
+			});
 
-			console.log("-- extracting NDI SDK distribution");
+			log.step("Extracting NDI SDK distribution");
 			const workDir = tmp.tmpNameSync();
 			shell.mkdir("-p", workDir);
 			await execa("tar", ["-z", "-x", "-C", workDir, "-f", tarFile], {
@@ -191,7 +349,7 @@ async function main() {
 				},
 			);
 
-			console.log("-- assembling NDI SDK subset");
+			log.step("Assembling Linux NDI SDK subset");
 			shell.rm("-rf", "ndi");
 			shell.mkdir("-p", [
 				"ndi/include",
@@ -253,34 +411,21 @@ async function main() {
 						}
 					}
 				} catch (e) {
-					console.error(`** ERROR: ${e}`);
+					const message =
+						e instanceof Error ? e.message : e ? String(e) : "Unknown error";
+					log.error(`Failed to normalize Linux libraries in ${d}: ${message}`);
 				}
 			}
-			console.log("-- removing temporary files");
+			log.step("Removing temporary files");
 			shell.rm("-f", tarFile);
 			shell.rm("-rf", workDir);
 		}
 	}
-
-	console.log("Preparing to build");
-	let buildParam = "build";
-	if (platform === "linux") {
-		const targetArch = process.env.npm_config_target_arch || "";
-		if (arch !== "arm" && ["armv7l", "arm"].includes(targetArch)) {
-			buildParam = "build:linux-arm";
-		} else if (arch !== "arm64" && targetArch === "arm64") {
-			buildParam = "build:linux-arm64";
-		} else if (arch !== "x64" && targetArch === "x64") {
-			buildParam = "build:linux-x64";
-		}
-	}
-
-	await execa("npm", ["run", buildParam], {
-		stdio: "inherit",
-		env: process.env,
-	});
 }
 
 main().catch((err) => {
-	console.error(`** ERROR: ${err}`);
+	const message =
+		err instanceof Error ? (err.stack ?? err.message) : String(err);
+	log.error(message);
+	process.exitCode = 1;
 });
