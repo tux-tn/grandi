@@ -20,10 +20,12 @@
 #include "grandi_util.h"
 
 napi_value receive(napi_env env, napi_callback_info info);
+napi_value destroyReceive(napi_env env, napi_callback_info info);
 napi_value videoReceive(napi_env env, napi_callback_info info);
 napi_value audioReceive(napi_env env, napi_callback_info info);
 napi_value metadataReceive(napi_env env, napi_callback_info info);
 napi_value dataReceive(napi_env env, napi_callback_info info);
+napi_value setReceiveTally(napi_env env, napi_callback_info info);
 
 struct receiveCarrier : carrier
 {

@@ -9,6 +9,7 @@ import type {
 	ReceivedVideoFrame,
 	Receiver,
 	Sender,
+	SenderTally,
 	Source,
 } from "../../src/types";
 
@@ -44,7 +45,7 @@ async function waitForSourceByName(
 		}
 		throw new Error(`Timed out discovering sender ${name}`);
 	} finally {
-		await finder.destroy();
+		finder.destroy();
 	}
 }
 
@@ -97,6 +98,12 @@ function assertReceivedVideoFrame(frame: ReceivedVideoFrame) {
 	expect(frame.timestamp.length).toBe(2);
 }
 
+function assertTallyShape(tally: SenderTally) {
+	expect(typeof tally.changed).toBe("boolean");
+	expect(typeof tally.on_program).toBe("boolean");
+	expect(typeof tally.on_preview).toBe("boolean");
+}
+
 describeIntegration("grandi native addon (integration)", () => {
 	beforeAll(() => {
 		grandi.initialize();
@@ -117,7 +124,7 @@ describeIntegration("grandi native addon (integration)", () => {
 	it("creates and disposes finders", async () => {
 		const finder = await grandi.find({ showLocalSources: true });
 		expect(Array.isArray(finder.sources())).toBe(true);
-		await finder.destroy();
+		expect(finder.destroy()).toBe(true);
 	});
 
 	test("can send frames that are received locally", async () => {
@@ -144,10 +151,41 @@ describeIntegration("grandi native addon (integration)", () => {
 			expect(frame.yres).toBe(36);
 			const connections = await sender.connections();
 			expect(connections).toBeGreaterThanOrEqual(1);
+
+			const tallyInitial = sender.tally();
+			assertTallyShape(tallyInitial);
+			const tallyStable = sender.tally();
+			expect(tallyStable.changed).toBe(false);
+
+			expect(receiver.tally({ onProgram: true, onPreview: false })).toBe(true);
+			await sleep(200);
+			const tallyProgram = sender.tally();
+			assertTallyShape(tallyProgram);
+			expect(tallyProgram.on_program).toBe(true);
+			expect(tallyProgram.on_preview).toBe(false);
+			expect(tallyProgram.changed).toBe(true);
+			expect(sender.tally().changed).toBe(false);
+
+			expect(receiver.tally({ onProgram: false, onPreview: true })).toBe(true);
+			await sleep(200);
+			const tallyPreview = sender.tally();
+			assertTallyShape(tallyPreview);
+			expect(tallyPreview.on_program).toBe(false);
+			expect(tallyPreview.on_preview).toBe(true);
+			expect(tallyPreview.changed).toBe(true);
+			expect(sender.tally().changed).toBe(false);
 		} finally {
 			controller.running = false;
 			await pumpTask;
-			await sender.destroy();
+			if (receiver) {
+				receiver.destroy();
+				await sleep(200);
+				const tallyAfterDisconnect = sender.tally();
+				assertTallyShape(tallyAfterDisconnect);
+				expect(tallyAfterDisconnect.changed).toBe(true);
+				expect(sender.tally().changed).toBe(false);
+			}
+			sender.destroy();
 		}
 	}, 60_000);
 
@@ -187,8 +225,9 @@ describeIntegration("grandi native addon (integration)", () => {
 		} finally {
 			controller.running = false;
 			await pumpTask;
-			await routing?.destroy();
-			await sender.destroy();
+			routedReceiver?.destroy();
+			routing?.destroy();
+			sender.destroy();
 		}
 	}, 60_000);
 });

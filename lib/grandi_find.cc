@@ -217,50 +217,41 @@ napi_value find(napi_env env, napi_callback_info info)
 /*  API method "find.destroy()"  */
 napi_value find_destroy(napi_env env, napi_callback_info info)
 {
-    /*  create a new Promise carrier object  */
-    carrier *c = new carrier;
-    napi_value promise;
-    c->status = napi_create_promise(env, &c->_deferred, &promise);
-    REJECT_RETURN;
-
-    /*  fetch the NDI find wrapper object ("this" of the "destroy" method)  */
-    size_t argc = 1;
-    napi_value args[1];
+    bool success = false;
     napi_value thisValue;
-    c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
-    REJECT_RETURN;
+    size_t argc = 0;
+    if (napi_get_cb_info(env, info, &argc, nullptr, &thisValue, nullptr) != napi_ok)
+        goto done;
 
-    /*  fetch NDI find external object  */
     napi_value embeddedValue;
-    c->status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-    REJECT_RETURN;
+    if (napi_get_named_property(env, thisValue, "embedded", &embeddedValue) != napi_ok)
+        goto done;
 
-    /*  ensure it was still not manually destroyed  */
     napi_valuetype result;
     if (napi_typeof(env, embeddedValue, &result) != napi_ok)
-        NAPI_THROW_ERROR("NDI find already destroyed");
+        goto done;
+
     if (result == napi_external)
     {
-        /*  fetch NDI find native object  */
         embeddedValue_t *embeddedData;
-        c->status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-        REJECT_RETURN;
-        NDIlib_find_instance_t find = (NDIlib_find_instance_t)(embeddedData->value);
+        if (napi_get_value_external(env, embeddedValue, (void **)&embeddedData) != napi_ok)
+            goto done;
 
-        /*  call the NDI API  */
-        NDIlib_find_destroy(find);
-
-        /*  indicate to finalizeFind that the NDI find native object is already destroyed  */
-        embeddedData->value = nullptr;
-        REJECT_RETURN;
+        if (embeddedData != nullptr)
+        {
+            NDIlib_find_instance_t find = (NDIlib_find_instance_t)(embeddedData->value);
+            if (find != nullptr)
+                NDIlib_find_destroy(find);
+            embeddedData->value = nullptr;
+        }
+        success = true;
     }
 
-    /*  resolve promise  */
-    napi_value undefined;
-    napi_get_undefined(env, &undefined);
-    napi_resolve_deferred(env, c->_deferred, undefined);
-
-    return promise;
+done:
+    napi_value resultValue;
+    if (napi_get_boolean(env, success, &resultValue) != napi_ok)
+        napi_get_boolean(env, false, &resultValue);
+    return resultValue;
 }
 
 /*  API method "find.sources()"  */

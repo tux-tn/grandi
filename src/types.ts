@@ -131,6 +131,11 @@ export interface AudioReceiveOptions {
 
 export interface Receiver {
 	embedded: unknown;
+	source: Source;
+	colorFormat: ColorFormat;
+	bandwidth: Bandwidth;
+	allowVideoFields: boolean;
+	name?: string;
 	video(timeoutMs?: number): Promise<ReceivedVideoFrame>;
 	audio(timeoutMs?: number): Promise<ReceivedAudioFrame>;
 	audio(
@@ -143,11 +148,13 @@ export interface Receiver {
 		options: AudioReceiveOptions,
 		timeoutMs?: number,
 	): Promise<ReceiverDataFrame>;
-	source: Source;
-	colorFormat: ColorFormat;
-	bandwidth: Bandwidth;
-	allowVideoFields: boolean;
-	name?: string;
+	tally(state: ReceiverTallyState): boolean;
+	destroy(): boolean;
+}
+
+export interface ReceiverTallyState {
+	onProgram?: boolean;
+	onPreview?: boolean;
 }
 
 export interface SenderTally {
@@ -167,14 +174,14 @@ export interface Sender {
 	connections(): number;
 	tally(): SenderTally;
 	sourcename(): string;
-	destroy(): Promise<void>;
+	destroy(): boolean;
 }
 
 export interface Routing {
 	embedded: unknown;
 	name?: string;
 	groups?: string;
-	destroy(): Promise<void>;
+	destroy(): boolean;
 	change(source: Source): boolean;
 	clear(): boolean;
 	connections(): number;
@@ -184,7 +191,7 @@ export interface Routing {
 export interface Finder {
 	sources(): Source[];
 	wait(timeoutMs?: number): boolean;
-	destroy(): Promise<void>;
+	destroy(): boolean;
 }
 
 export interface FindOptions {

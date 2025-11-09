@@ -75,6 +75,7 @@ export type {
 	ReceivedVideoFrame,
 	ReceiveOptions,
 	ReceiverDataFrame,
+	ReceiverTallyState,
 	Routing,
 	Sender,
 	SenderTally,

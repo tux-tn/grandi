@@ -169,7 +169,7 @@ describe("src/index entrypoint", () => {
 		await expect(grandiModule.routing({} as never)).rejects.toThrow(
 			"Unsupported platform or CPU",
 		);
-		await expect(grandiModule.initialize()).toBe(false);
-		await expect(grandiModule.destroy()).toBe(false);
+		expect(grandiModule.initialize()).toBe(false);
+		expect(grandiModule.destroy()).toBe(false);
 	});
 });

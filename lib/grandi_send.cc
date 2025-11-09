@@ -182,53 +182,40 @@ void finalizeSend(napi_env env, void *data, void *hint)
 /*  explicit destruction of NDI sender via "destroy" method  */
 napi_value destroySend(napi_env env, napi_callback_info info)
 {
-  /*  create a new Promise carrier object  */
-  carrier *c = new carrier;
-  napi_value promise;
-  c->status = napi_create_promise(env, &c->_deferred, &promise);
-  REJECT_RETURN;
-
-  /*  fetch the NDI sender wrapper object ("this" of the "destroy" method)  */
-  size_t argc = 1;
-  napi_value args[1];
+  bool success = false;
   napi_value thisValue;
-  c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
-  REJECT_RETURN;
+  size_t argc = 0;
+  if (napi_get_cb_info(env, info, &argc, nullptr, &thisValue, nullptr) != napi_ok)
+    goto create_result;
 
-  /*  fetch NDI sender external object  */
   napi_value sendValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
-  REJECT_RETURN;
+  if (napi_get_named_property(env, thisValue, "embedded", &sendValue) != napi_ok)
+    goto create_result;
 
-  /*  ensure it was still not manually destroyed  */
-  napi_valuetype result;
-  if (napi_typeof(env, sendValue, &result) != napi_ok)
-    NAPI_THROW_ERROR("NDI sender already destroyed");
-  if (result == napi_external)
+  napi_valuetype resultType;
+  if (napi_typeof(env, sendValue, &resultType) != napi_ok)
+    goto create_result;
+
+  if (resultType == napi_external)
   {
-    /*  fetch NDI sender native object  */
     void *sendData;
-    c->status = napi_get_value_external(env, sendValue, &sendData);
-    REJECT_RETURN;
-    NDIlib_send_instance_t send = (NDIlib_send_instance_t)sendData;
+    if (napi_get_value_external(env, sendValue, &sendData) != napi_ok)
+      goto create_result;
 
-    /*  call the NDI API  */
-    NDIlib_send_destroy(send);
-
-    /*  overwrite the "embedded" field with a non-external value
-        (to ensure that the "finalizeSend" will no longer do anything
-        once the garbage collection fires)  */
+    NDIlib_send_destroy((NDIlib_send_instance_t)sendData);
     napi_value value;
-    napi_create_int32(env, 0, &value);
-    c->status = napi_set_named_property(env, thisValue, "embedded", value);
-    REJECT_RETURN;
+    if (napi_create_int32(env, 0, &value) == napi_ok)
+      napi_set_named_property(env, thisValue, "embedded", value);
+    success = true;
   }
 
-  napi_value undefined;
-  napi_get_undefined(env, &undefined);
-  napi_resolve_deferred(env, c->_deferred, undefined);
-
-  return promise;
+create_result:
+  napi_value result;
+  if (napi_get_boolean(env, success, &result) != napi_ok)
+  {
+    napi_get_boolean(env, false, &result);
+  }
+  return result;
 }
 
 void sendComplete(napi_env env, napi_status asyncStatus, void *data)

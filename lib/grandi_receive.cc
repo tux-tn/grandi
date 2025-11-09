@@ -31,89 +31,144 @@
 
 namespace
 {
-uint32_t remainingWaitMs(uint32_t initialWait,
-                         const std::chrono::steady_clock::time_point &start)
-{
-  if (initialWait == 0)
-    return 0;
-  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - start)
-                    .count();
-  if (elapsed >= initialWait)
-    return 0;
-  return initialWait - static_cast<uint32_t>(elapsed);
-}
-
-void freeCapturedFrame(dataCarrier *c, NDIlib_frame_type_e frameType)
-{
-  switch (frameType)
+  uint32_t remainingWaitMs(uint32_t initialWait,
+                           const std::chrono::steady_clock::time_point &start)
   {
-  case NDIlib_frame_type_video:
-    NDIlib_recv_free_video_v2(c->recv, &c->videoFrame);
-    break;
-  case NDIlib_frame_type_audio:
-    NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
-    break;
-  case NDIlib_frame_type_metadata:
-    NDIlib_recv_free_metadata(c->recv, &c->metadataFrame);
-    break;
-  default:
-    break;
+    if (initialWait == 0)
+      return 0;
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - start)
+                       .count();
+    if (elapsed >= initialWait)
+      return 0;
+    return initialWait - static_cast<uint32_t>(elapsed);
   }
-}
 
-bool captureUntilFrame(dataCarrier *c,
-                       NDIlib_frame_type_e desired,
-                       uint32_t initialWait,
-                       int32_t timeoutStatus,
-                       const char *timeoutMsg,
-                       const char *connectionMsg)
-{
-  auto start = std::chrono::steady_clock::now();
-  uint32_t waitMs = initialWait;
-
-  while (true)
+  void freeCapturedFrame(dataCarrier *c, NDIlib_frame_type_e frameType)
   {
-    NDIlib_frame_type_e frameType =
-        NDIlib_recv_capture_v3(c->recv, &c->videoFrame, &c->audioFrame,
-                               &c->metadataFrame, waitMs);
-
-    if (frameType == desired)
-      return true;
-
     switch (frameType)
     {
-    case NDIlib_frame_type_none:
-      c->status = timeoutStatus;
-      c->errorMsg = timeoutMsg;
-      return false;
-    case NDIlib_frame_type_error:
-      c->status = GRANDI_CONNECTION_LOST;
-      c->errorMsg = connectionMsg;
-      return false;
     case NDIlib_frame_type_video:
+      NDIlib_recv_free_video_v2(c->recv, &c->videoFrame);
+      break;
     case NDIlib_frame_type_audio:
+      NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
+      break;
     case NDIlib_frame_type_metadata:
-      freeCapturedFrame(c, frameType);
+      NDIlib_recv_free_metadata(c->recv, &c->metadataFrame);
       break;
     default:
       break;
     }
+  }
 
-    waitMs = remainingWaitMs(initialWait, start);
-    if (initialWait != 0 && waitMs == 0)
+  bool captureUntilFrame(dataCarrier *c,
+                         NDIlib_frame_type_e desired,
+                         uint32_t initialWait,
+                         int32_t timeoutStatus,
+                         const char *timeoutMsg,
+                         const char *connectionMsg)
+  {
+    auto start = std::chrono::steady_clock::now();
+    uint32_t waitMs = initialWait;
+
+    while (true)
     {
-      c->status = timeoutStatus;
-      c->errorMsg = timeoutMsg;
-      return false;
+      NDIlib_frame_type_e frameType =
+          NDIlib_recv_capture_v3(c->recv, &c->videoFrame, &c->audioFrame,
+                                 &c->metadataFrame, waitMs);
+
+      if (frameType == desired)
+        return true;
+
+      switch (frameType)
+      {
+      case NDIlib_frame_type_none:
+        c->status = timeoutStatus;
+        c->errorMsg = timeoutMsg;
+        return false;
+      case NDIlib_frame_type_error:
+        c->status = GRANDI_CONNECTION_LOST;
+        c->errorMsg = connectionMsg;
+        return false;
+      case NDIlib_frame_type_video:
+      case NDIlib_frame_type_audio:
+      case NDIlib_frame_type_metadata:
+        freeCapturedFrame(c, frameType);
+        break;
+      default:
+        break;
+      }
+
+      waitMs = remainingWaitMs(initialWait, start);
+      if (initialWait != 0 && waitMs == 0)
+      {
+        c->status = timeoutStatus;
+        c->errorMsg = timeoutMsg;
+        return false;
+      }
     }
   }
-}
 }
 
 void finalizeReceive(napi_env env, void *data, void *hint)
 {
-  NDIlib_recv_destroy((NDIlib_recv_instance_t)data);
+  if (hint == nullptr)
+  {
+    NDIlib_recv_destroy((NDIlib_recv_instance_t)data);
+    return;
+  }
+
+  napi_value obj = (napi_value)hint;
+  napi_value recvValue;
+  if (napi_get_named_property(env, obj, "embedded", &recvValue) != napi_ok)
+    return;
+
+  napi_valuetype result;
+  if (napi_typeof(env, recvValue, &result) != napi_ok)
+    return;
+  if (result != napi_external)
+    return;
+
+  void *recvData;
+  if (napi_get_value_external(env, recvValue, &recvData) != napi_ok)
+    return;
+  NDIlib_recv_destroy((NDIlib_recv_instance_t)recvData);
+}
+
+napi_value destroyReceive(napi_env env, napi_callback_info info)
+{
+  bool success = false;
+  napi_value thisValue;
+  size_t argc = 0;
+  if (napi_get_cb_info(env, info, &argc, nullptr, &thisValue, nullptr) != napi_ok)
+    goto done;
+
+  napi_value recvValue;
+  if (napi_get_named_property(env, thisValue, "embedded", &recvValue) != napi_ok)
+    goto done;
+
+  napi_valuetype type;
+  if (napi_typeof(env, recvValue, &type) != napi_ok)
+    goto done;
+
+  if (type == napi_external)
+  {
+    void *recvData;
+    if (napi_get_value_external(env, recvValue, &recvData) != napi_ok)
+      goto done;
+    NDIlib_recv_destroy((NDIlib_recv_instance_t)recvData);
+    napi_value value;
+    if (napi_create_int32(env, 0, &value) == napi_ok)
+      napi_set_named_property(env, thisValue, "embedded", value);
+    success = true;
+  }
+
+done:
+  napi_value result;
+  if (napi_get_boolean(env, success, &result) != napi_ok)
+    napi_get_boolean(env, false, &result);
+  return result;
 }
 
 void receiveExecute(napi_env env, void *data)
@@ -153,9 +208,16 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data)
   REJECT_STATUS;
 
   napi_value embedded;
-  c->status = napi_create_external(env, c->recv, finalizeReceive, nullptr, &embedded);
+  c->status = napi_create_external(env, c->recv, finalizeReceive, result, &embedded);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "embedded", embedded);
+  REJECT_STATUS;
+
+  napi_value destroyFn;
+  c->status = napi_create_function(env, "destroy", NAPI_AUTO_LENGTH, destroyReceive,
+                                   nullptr, &destroyFn);
+  REJECT_STATUS;
+  c->status = napi_set_named_property(env, result, "destroy", destroyFn);
   REJECT_STATUS;
 
   napi_value videoFn;
@@ -184,6 +246,13 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data)
                                    nullptr, &dataFn);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "data", dataFn);
+  REJECT_STATUS;
+
+  napi_value tallyFn;
+  c->status = napi_create_function(env, "tally", NAPI_AUTO_LENGTH, setReceiveTally,
+                                   nullptr, &tallyFn);
+  REJECT_STATUS;
+  c->status = napi_set_named_property(env, result, "tally", tallyFn);
   REJECT_STATUS;
 
   napi_value source, name, uri;
@@ -515,6 +584,75 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data)
   FLOATING_STATUS;
 
   tidyCarrier(env, c);
+}
+
+napi_value setReceiveTally(napi_env env, napi_callback_info info)
+{
+  napi_status status;
+
+  size_t argc = 1;
+  napi_value args[1];
+  napi_value thisValue;
+  status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
+  CHECK_STATUS;
+
+  if (argc != 1)
+    NAPI_THROW_ERROR("Receiver tally must be called with a single options object.");
+
+  napi_value embedded;
+  status = napi_get_named_property(env, thisValue, "embedded", &embedded);
+  CHECK_STATUS;
+  void *recvData;
+  status = napi_get_value_external(env, embedded, &recvData);
+  CHECK_STATUS;
+  NDIlib_recv_instance_t recv = (NDIlib_recv_instance_t)recvData;
+
+  napi_valuetype type;
+  status = napi_typeof(env, args[0], &type);
+  CHECK_STATUS;
+  bool isArray;
+  status = napi_is_array(env, args[0], &isArray);
+  CHECK_STATUS;
+  if ((type != napi_object) || isArray)
+    NAPI_THROW_ERROR("Receiver tally argument must be an object.");
+
+  bool onProgram = false;
+  bool onPreview = false;
+  // check for onProgram and onPreview properties
+  napi_value checkType;
+  status = napi_get_named_property(env, args[0], "onProgram", &checkType);
+  CHECK_STATUS;
+  status = napi_typeof(env, checkType, &type);
+  CHECK_STATUS;
+  if (type != napi_undefined)
+  {
+    if (type != napi_boolean)
+      NAPI_THROW_ERROR("onProgram property must be a Boolean.");
+    status = napi_get_value_bool(env, checkType, &onProgram);
+    CHECK_STATUS;
+  }
+
+  status = napi_get_named_property(env, args[0], "onPreview", &checkType);
+  CHECK_STATUS;
+  status = napi_typeof(env, checkType, &type);
+  CHECK_STATUS;
+  if (type != napi_undefined)
+  {
+    if (type != napi_boolean)
+      NAPI_THROW_ERROR("onPreview property must be a Boolean.");
+    status = napi_get_value_bool(env, checkType, &onPreview);
+    CHECK_STATUS;
+  }
+
+  NDIlib_tally_t tally;
+  tally.on_program = onProgram;
+  tally.on_preview = onPreview;
+  NDIlib_recv_set_tally(recv, &tally);
+
+  napi_value result;
+  status = napi_get_boolean(env, true, &result);
+  CHECK_STATUS;
+  return result;
 }
 
 napi_value videoReceive(napi_env env, napi_callback_info info)
