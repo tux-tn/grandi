@@ -131,5 +131,6 @@ bool validFrameFormat(NDIlib_frame_format_type_e format);
 bool validAudioFormat(Grandi_audio_format_e format);
 
 napi_status makeNativeSource(napi_env env, napi_value source, NDIlib_source_t *result);
+void freeNativeSource(NDIlib_source_t *source);
 
 #endif // GRANDI_UTIL_H

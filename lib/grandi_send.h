@@ -16,6 +16,7 @@
 #ifndef GRANDI_SEND_H
 #define GRANDI_SEND_H
 
+#include <string>
 #include "node_api.h"
 #include "grandi_util.h"
 
@@ -31,6 +32,7 @@ struct sendCarrier : carrier
   ~sendCarrier()
   {
     free(name);
+    free(groups);
   }
 };
 
@@ -40,11 +42,7 @@ struct sendDataCarrier : carrier
   NDIlib_video_frame_v2_t videoFrame;
   NDIlib_audio_frame_v3_t audioFrame;
   NDIlib_metadata_frame_t metadataFrame;
-  napi_ref sourceBufferRef = nullptr;
-  ~sendDataCarrier()
-  {
-    // TODO: free sourceBufferRef
-  }
+  std::string frameMetadata;
 };
 
 #endif /* GRANDI_SEND_H */

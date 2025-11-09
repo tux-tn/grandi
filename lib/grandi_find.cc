@@ -298,8 +298,16 @@ napi_value find_sources(napi_env env, napi_callback_info info)
         napi_value name, uri;
         status = napi_create_string_utf8(env, sources[i].p_ndi_name, NAPI_AUTO_LENGTH, &name);
         CHECK_STATUS;
-        status = napi_create_string_utf8(env, sources[i].p_url_address, NAPI_AUTO_LENGTH, &uri);
-        CHECK_STATUS;
+        if (sources[i].p_url_address != nullptr)
+        {
+            status = napi_create_string_utf8(env, sources[i].p_url_address, NAPI_AUTO_LENGTH, &uri);
+            CHECK_STATUS;
+        }
+        else
+        {
+            status = napi_get_null(env, &uri);
+            CHECK_STATUS;
+        }
         status = napi_create_object(env, &item);
         CHECK_STATUS;
         status = napi_set_named_property(env, item, "name", name);

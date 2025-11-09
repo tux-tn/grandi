@@ -29,6 +29,88 @@
 #include "grandi_util.h"
 #include "grandi_find.h"
 
+namespace
+{
+uint32_t remainingWaitMs(uint32_t initialWait,
+                         const std::chrono::steady_clock::time_point &start)
+{
+  if (initialWait == 0)
+    return 0;
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start)
+                    .count();
+  if (elapsed >= initialWait)
+    return 0;
+  return initialWait - static_cast<uint32_t>(elapsed);
+}
+
+void freeCapturedFrame(dataCarrier *c, NDIlib_frame_type_e frameType)
+{
+  switch (frameType)
+  {
+  case NDIlib_frame_type_video:
+    NDIlib_recv_free_video_v2(c->recv, &c->videoFrame);
+    break;
+  case NDIlib_frame_type_audio:
+    NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
+    break;
+  case NDIlib_frame_type_metadata:
+    NDIlib_recv_free_metadata(c->recv, &c->metadataFrame);
+    break;
+  default:
+    break;
+  }
+}
+
+bool captureUntilFrame(dataCarrier *c,
+                       NDIlib_frame_type_e desired,
+                       uint32_t initialWait,
+                       int32_t timeoutStatus,
+                       const char *timeoutMsg,
+                       const char *connectionMsg)
+{
+  auto start = std::chrono::steady_clock::now();
+  uint32_t waitMs = initialWait;
+
+  while (true)
+  {
+    NDIlib_frame_type_e frameType =
+        NDIlib_recv_capture_v3(c->recv, &c->videoFrame, &c->audioFrame,
+                               &c->metadataFrame, waitMs);
+
+    if (frameType == desired)
+      return true;
+
+    switch (frameType)
+    {
+    case NDIlib_frame_type_none:
+      c->status = timeoutStatus;
+      c->errorMsg = timeoutMsg;
+      return false;
+    case NDIlib_frame_type_error:
+      c->status = GRANDI_CONNECTION_LOST;
+      c->errorMsg = connectionMsg;
+      return false;
+    case NDIlib_frame_type_video:
+    case NDIlib_frame_type_audio:
+    case NDIlib_frame_type_metadata:
+      freeCapturedFrame(c, frameType);
+      break;
+    default:
+      break;
+    }
+
+    waitMs = remainingWaitMs(initialWait, start);
+    if (initialWait != 0 && waitMs == 0)
+    {
+      c->status = timeoutStatus;
+      c->errorMsg = timeoutMsg;
+      return false;
+    }
+  }
+}
+}
+
 void finalizeReceive(napi_env env, void *data, void *hint)
 {
   NDIlib_recv_destroy((NDIlib_recv_instance_t)data);
@@ -310,22 +392,13 @@ void videoReceiveExecute(napi_env env, void *data)
 {
   dataCarrier *c = (dataCarrier *)data;
 
-  switch (NDIlib_recv_capture_v2(c->recv, &c->videoFrame, nullptr, nullptr, c->wait))
-  {
-  case NDIlib_frame_type_none:
-    c->status = GRANDI_NOT_FOUND;
-    c->errorMsg = "No video data received in the requested time interval.";
-    break;
-
-  // Video data
-  case NDIlib_frame_type_video:
-    break;
-
-  default:
-    c->status = GRANDI_NOT_VIDEO;
-    c->errorMsg = "Non-video data received on video capture.";
-    break;
-  }
+  if (!captureUntilFrame(c,
+                         NDIlib_frame_type_video,
+                         c->wait,
+                         GRANDI_NOT_FOUND,
+                         "No video data received in the requested time interval.",
+                         "Received error response from NDI video request. Connection lost."))
+    return;
 }
 
 void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data)
@@ -494,35 +567,30 @@ void audioReceiveExecute(napi_env env, void *data)
 {
   dataCarrier *c = (dataCarrier *)data;
 
-  switch (NDIlib_recv_capture_v2(c->recv, nullptr, &c->audioFrame, nullptr, c->wait))
+  if (!captureUntilFrame(c,
+                         NDIlib_frame_type_audio,
+                         c->wait,
+                         GRANDI_NOT_FOUND,
+                         "No audio data received in the requested time interval.",
+                         "Received error response from NDI audio request. Connection lost."))
+    return;
+
+  const NDIlib_audio_frame_v2_t *audioFrameV2 =
+      reinterpret_cast<const NDIlib_audio_frame_v2_t *>(&c->audioFrame);
+
+  switch (c->audioFormat)
   {
-  case NDIlib_frame_type_none:
-    c->status = GRANDI_NOT_FOUND;
-    c->errorMsg = "No audio data received in the requested time interval.";
+  case Grandi_audio_format_int_16_interleaved:
+    c->audioFrame16s.reference_level = c->referenceLevel;
+    c->audioFrame16s.p_data = new short[c->audioFrame.no_samples * c->audioFrame.no_channels];
+    NDIlib_util_audio_to_interleaved_16s_v2(audioFrameV2, &c->audioFrame16s);
     break;
-
-  // Audio data
-  case NDIlib_frame_type_audio:
-    switch (c->audioFormat)
-    {
-    case Grandi_audio_format_int_16_interleaved:
-      c->audioFrame16s.reference_level = c->referenceLevel;
-      c->audioFrame16s.p_data = new short[c->audioFrame.no_samples * c->audioFrame.no_channels];
-      NDIlib_util_audio_to_interleaved_16s_v2(&c->audioFrame, &c->audioFrame16s);
-      break;
-    case Grandi_audio_format_float_32_interleaved:
-      c->audioFrame32fIlvd.p_data = new float[c->audioFrame.no_samples * c->audioFrame.no_channels];
-      NDIlib_util_audio_to_interleaved_32f_v2(&c->audioFrame, &c->audioFrame32fIlvd);
-      break;
-    case Grandi_audio_format_float_32_separate:
-    default:
-      break;
-    }
+  case Grandi_audio_format_float_32_interleaved:
+    c->audioFrame32fIlvd.p_data = new float[c->audioFrame.no_samples * c->audioFrame.no_channels];
+    NDIlib_util_audio_to_interleaved_32f_v2(audioFrameV2, &c->audioFrame32fIlvd);
     break;
-
+  case Grandi_audio_format_float_32_separate:
   default:
-    c->status = GRANDI_NOT_AUDIO;
-    c->errorMsg = "Non-audio data received on audio capture.";
     break;
   }
 }
@@ -643,7 +711,7 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data)
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
 
-  NDIlib_recv_free_audio_v2(c->recv, &c->audioFrame);
+  NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
 
   napi_status status;
   status = napi_resolve_deferred(env, c->_deferred, result);
@@ -759,22 +827,13 @@ void metadataReceiveExecute(napi_env env, void *data)
 {
   dataCarrier *c = (dataCarrier *)data;
 
-  switch (NDIlib_recv_capture_v2(c->recv, nullptr, nullptr, &c->metadataFrame, c->wait))
-  {
-  case NDIlib_frame_type_none:
-    c->status = GRANDI_NOT_FOUND;
-    c->errorMsg = "No metadata received in the requested time interval.";
-    break;
-
-  // Metadata
-  case NDIlib_frame_type_metadata:
-    break;
-
-  default:
-    c->status = GRANDI_NOT_METADATA;
-    c->errorMsg = "Non-metadata payload received on metadata capture.";
-    break;
-  }
+  if (!captureUntilFrame(c,
+                         NDIlib_frame_type_metadata,
+                         c->wait,
+                         GRANDI_NOT_FOUND,
+                         "No metadata received in the requested time interval.",
+                         "Received error response from NDI metadata request. Connection lost."))
+    return;
 }
 
 void metadataReceiveComplete(napi_env env, napi_status asyncStatus, void *data)
@@ -808,6 +867,17 @@ void metadataReceiveComplete(napi_env env, napi_status asyncStatus, void *data)
   REJECT_STATUS;
   c->status = napi_create_int32(env, (c->metadataFrame.timecode % 10000000) * 100, &paramn);
   REJECT_STATUS;
+
+  napi_value timestampArray;
+  c->status = napi_create_array(env, &timestampArray);
+  REJECT_STATUS;
+  c->status = napi_set_element(env, timestampArray, 0, params);
+  REJECT_STATUS;
+  c->status = napi_set_element(env, timestampArray, 1, paramn);
+  REJECT_STATUS;
+  c->status = napi_set_named_property(env, result, "timestamp", timestampArray);
+  REJECT_STATUS;
+
   c->status = napi_create_array(env, &param);
   REJECT_STATUS;
   c->status = napi_set_element(env, param, 0, params);
@@ -881,28 +951,32 @@ void dataReceiveExecute(napi_env env, void *data)
 {
   dataCarrier *c = (dataCarrier *)data;
 
-  c->frameType = NDIlib_recv_capture_v2(c->recv, &c->videoFrame, &c->audioFrame, &c->metadataFrame, c->wait);
+  c->frameType = NDIlib_recv_capture_v3(c->recv, &c->videoFrame, &c->audioFrame, &c->metadataFrame, c->wait);
   switch (c->frameType)
   {
 
   // Audio data
   case NDIlib_frame_type_audio:
+  {
+    const NDIlib_audio_frame_v2_t *audioFrameV2 =
+        reinterpret_cast<const NDIlib_audio_frame_v2_t *>(&c->audioFrame);
     switch (c->audioFormat)
     {
     case Grandi_audio_format_int_16_interleaved:
       c->audioFrame16s.reference_level = c->referenceLevel;
       c->audioFrame16s.p_data = new short[c->audioFrame.no_samples * c->audioFrame.no_channels];
-      NDIlib_util_audio_to_interleaved_16s_v2(&c->audioFrame, &c->audioFrame16s);
+      NDIlib_util_audio_to_interleaved_16s_v2(audioFrameV2, &c->audioFrame16s);
       break;
     case Grandi_audio_format_float_32_interleaved:
       c->audioFrame32fIlvd.p_data = new float[c->audioFrame.no_samples * c->audioFrame.no_channels];
-      NDIlib_util_audio_to_interleaved_32f_v2(&c->audioFrame, &c->audioFrame32fIlvd);
+      NDIlib_util_audio_to_interleaved_32f_v2(audioFrameV2, &c->audioFrame32fIlvd);
       break;
     case Grandi_audio_format_float_32_separate:
     default:
       break;
     }
     break;
+  }
 
   // Handle all other types on completion
   default:

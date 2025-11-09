@@ -33,6 +33,105 @@ napi_value connections(napi_env env, napi_callback_info info);
 napi_value tally(napi_env env, napi_callback_info info);
 napi_value sourcename(napi_env env, napi_callback_info info);
 
+namespace
+{
+bool getInt64FromValue(napi_env env, napi_value value, int64_t *out, carrier *c, const char *propName)
+{
+  napi_valuetype type;
+  c->status = napi_typeof(env, value, &type);
+  if (c->status != napi_ok)
+    return false;
+  if (type == napi_number)
+  {
+    c->status = napi_get_value_int64(env, value, out);
+    return c->status == napi_ok;
+  }
+  if (type == napi_bigint)
+  {
+    bool lossless;
+    c->status = napi_get_value_bigint_int64(env, value, out, &lossless);
+    return c->status == napi_ok;
+  }
+  c->errorMsg = std::string(propName) + " value must be a number, bigint, or a [seconds,nanoseconds] tuple.";
+  c->status = GRANDI_INVALID_ARGS;
+  return false;
+}
+
+bool parsePtpTimestampArray(napi_env env, napi_value value, int64_t *out, carrier *c, const char *propName)
+{
+  bool isArray;
+  c->status = napi_is_array(env, value, &isArray);
+  if (c->status != napi_ok)
+    return false;
+  if (!isArray)
+  {
+    c->errorMsg = std::string(propName) + " value must be a [seconds,nanoseconds] array.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  uint32_t length;
+  c->status = napi_get_array_length(env, value, &length);
+  if (c->status != napi_ok)
+    return false;
+  if (length < 2)
+  {
+    c->errorMsg = std::string(propName) + " array must contain two numeric entries.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  napi_value secsValue, nanosValue;
+  c->status = napi_get_element(env, value, 0, &secsValue);
+  if (c->status != napi_ok)
+    return false;
+  c->status = napi_get_element(env, value, 1, &nanosValue);
+  if (c->status != napi_ok)
+    return false;
+
+  int64_t seconds = 0;
+  if (!getInt64FromValue(env, secsValue, &seconds, c, propName))
+    return false;
+
+  int64_t nanos = 0;
+  if (!getInt64FromValue(env, nanosValue, &nanos, c, propName))
+    return false;
+
+  int64_t hundredNsFromSeconds = seconds * 10000000LL;
+  int64_t hundredNsFromNanos = nanos / 100LL;
+  *out = hundredNsFromSeconds + hundredNsFromNanos;
+  return true;
+}
+
+bool parseTimeProperty(napi_env env, napi_value object, const char *propName, int64_t *target, carrier *c)
+{
+  napi_value property;
+  c->status = napi_get_named_property(env, object, propName, &property);
+  if (c->status != napi_ok)
+    return false;
+
+  napi_valuetype type;
+  c->status = napi_typeof(env, property, &type);
+  if (c->status != napi_ok)
+    return false;
+
+  if (type == napi_undefined)
+    return true;
+
+  if (type == napi_object)
+  {
+    bool isArray;
+    c->status = napi_is_array(env, property, &isArray);
+    if (c->status != napi_ok)
+      return false;
+    if (isArray)
+      return parsePtpTimestampArray(env, property, target, c, propName);
+  }
+
+  return getInt64FromValue(env, property, target, c, propName);
+}
+}
+
 void sendExecute(napi_env env, void *data)
 {
   sendCarrier *c = (sendCarrier *)data;
@@ -209,12 +308,19 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data)
   // c->status = napi_set_named_property(env, result, "data", dataFn);
   // REJECT_STATUS;
 
-  // napi_value name, groups, clockVideo, clockAudio;
-  napi_value name, clockVideo, clockAudio;
+  napi_value name, groups, clockVideo, clockAudio;
   c->status = napi_create_string_utf8(env, c->name, NAPI_AUTO_LENGTH, &name);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "name", name);
   REJECT_STATUS;
+
+  if (c->groups != nullptr)
+  {
+    c->status = napi_create_string_utf8(env, c->groups, NAPI_AUTO_LENGTH, &groups);
+    REJECT_STATUS;
+    c->status = napi_set_named_property(env, result, "groups", groups);
+    REJECT_STATUS;
+  }
 
   c->status = napi_get_boolean(env, c->clockVideo, &clockVideo);
   REJECT_STATUS;
@@ -263,8 +369,7 @@ napi_value send(napi_env env, napi_callback_info info)
         GRANDI_INVALID_ARGS);
 
   napi_value config = args[0];
-  // napi_value name, groups, clockVideo, clockAudio;
-  napi_value name, clockVideo, clockAudio;
+  napi_value name, groups, clockVideo, clockAudio;
 
   c->status = napi_get_named_property(env, config, "name", &name);
   REJECT_RETURN;
@@ -281,14 +386,23 @@ napi_value send(napi_env env, napi_callback_info info)
   c->status = napi_get_value_string_utf8(env, name, c->name, namel + 1, &namel);
   REJECT_RETURN;
 
-  // c->status = napi_get_named_property(env, config, "groups", &groups);
-  // REJECT_RETURN;
-  // c->status = napi_typeof(env, groups, &type);
-  // REJECT_RETURN;
-
-  // if (type != napi_undefined && type != napi_string) REJECT_ERROR_RETURN(
-  //   "Groups must be of type string or ....",
-  //   GRANDI_INVALID_ARGS);
+  c->status = napi_get_named_property(env, config, "groups", &groups);
+  REJECT_RETURN;
+  c->status = napi_typeof(env, groups, &type);
+  REJECT_RETURN;
+  if (type != napi_undefined)
+  {
+    if (type != napi_string)
+      REJECT_ERROR_RETURN(
+          "Groups value must be a string when provided.",
+          GRANDI_INVALID_ARGS);
+    size_t groupsLen;
+    c->status = napi_get_value_string_utf8(env, groups, nullptr, 0, &groupsLen);
+    REJECT_RETURN;
+    c->groups = (char *)malloc(groupsLen + 1);
+    c->status = napi_get_value_string_utf8(env, groups, c->groups, groupsLen + 1, &groupsLen);
+    REJECT_RETURN;
+  }
 
   c->status = napi_get_named_property(env, config, "clockVideo", &clockVideo);
   REJECT_RETURN;
@@ -343,13 +457,17 @@ void videoSendComplete(napi_env env, napi_status asyncStatus, void *data)
   napi_value result;
   napi_status status;
 
-  c->status = napi_delete_reference(env, c->sourceBufferRef);
-  REJECT_STATUS;
+  if (c->passthru != nullptr)
+  {
+    c->status = napi_delete_reference(env, c->passthru);
+    c->passthru = nullptr;
+    REJECT_STATUS;
+  }
 
   if (asyncStatus != napi_ok)
   {
     c->status = asyncStatus;
-    c->errorMsg = "Async video frame receive failed to complete.";
+    c->errorMsg = "Async video frame send failed to complete.";
   }
   REJECT_STATUS;
 
@@ -462,30 +580,32 @@ napi_value videoSend(napi_env env, napi_callback_info info)
     c->videoFrame.picture_aspect_ratio = (float)pictureAspectRatio;
 
     c->videoFrame.timecode = NDIlib_send_timecode_synthesize;
-    c->status = napi_get_named_property(env, config, "timecode", &param);
+    if (!parseTimeProperty(env, config, "timecode", &c->videoFrame.timecode, c))
+      REJECT_RETURN;
+
+    c->videoFrame.timestamp = 0;
+    if (!parseTimeProperty(env, config, "timestamp", &c->videoFrame.timestamp, c))
+      REJECT_RETURN;
+
+    c->frameMetadata.clear();
+    c->videoFrame.p_metadata = nullptr;
+    c->status = napi_get_named_property(env, config, "metadata", &param);
     REJECT_RETURN;
     c->status = napi_typeof(env, param, &type);
     REJECT_RETURN;
     if (type != napi_undefined)
     {
-      if (type == napi_number)
-      {
-        c->status = napi_get_value_int64(env, param, &c->videoFrame.timecode);
-        REJECT_RETURN;
-      }
-      else if (type == napi_bigint)
-      {
-        bool lossless;
-        c->status = napi_get_value_bigint_int64(env, param, &c->videoFrame.timecode, &lossless);
-        REJECT_RETURN;
-      }
-      else
-        REJECT_ERROR_RETURN("timecode value must be a number or bigint", GRANDI_INVALID_ARGS);
+      if (type != napi_string)
+        REJECT_ERROR_RETURN("metadata value must be a string", GRANDI_INVALID_ARGS);
+      size_t metadataLen;
+      c->status = napi_get_value_string_utf8(env, param, nullptr, 0, &metadataLen);
+      REJECT_RETURN;
+      c->frameMetadata.resize(metadataLen + 1);
+      c->status = napi_get_value_string_utf8(env, param, c->frameMetadata.data(), metadataLen + 1, &metadataLen);
+      REJECT_RETURN;
+      c->frameMetadata.resize(metadataLen);
+      c->videoFrame.p_metadata = c->frameMetadata.empty() ? nullptr : c->frameMetadata.c_str();
     }
-
-    /*  initialize also timestamp (receiver-side only) and metadata  */
-    c->videoFrame.timestamp = 0;
-    c->videoFrame.p_metadata = NULL;
 
     c->status = napi_get_named_property(env, config, "frameFormatType", &param);
     REJECT_RETURN;
@@ -526,8 +646,10 @@ napi_value videoSend(napi_env env, napi_callback_info info)
     c->status = napi_get_buffer_info(env, videoBuffer, &data, &length);
     REJECT_RETURN;
     c->videoFrame.p_data = (uint8_t *)data;
-    c->status = napi_create_reference(env, videoBuffer, 1, &c->sourceBufferRef);
+    napi_ref bufferRef;
+    c->status = napi_create_reference(env, videoBuffer, 1, &bufferRef);
     REJECT_RETURN;
+    c->passthru = bufferRef;
     // TODO: check length
 
     c->status = napi_get_named_property(env, config, "fourCC", &param);
@@ -574,8 +696,12 @@ void audioSendComplete(napi_env env, napi_status asyncStatus, void *data)
   napi_value result;
   napi_status status;
 
-  c->status = napi_delete_reference(env, c->sourceBufferRef);
-  REJECT_STATUS;
+  if (c->passthru != nullptr)
+  {
+    c->status = napi_delete_reference(env, c->passthru);
+    c->passthru = nullptr;
+    REJECT_STATUS;
+  }
 
   if (asyncStatus != napi_ok)
   {
@@ -669,30 +795,32 @@ napi_value audioSend(napi_env env, napi_callback_info info)
     REJECT_RETURN;
 
     c->audioFrame.timecode = NDIlib_send_timecode_synthesize;
-    c->status = napi_get_named_property(env, config, "timecode", &param);
+    if (!parseTimeProperty(env, config, "timecode", &c->audioFrame.timecode, c))
+      REJECT_RETURN;
+
+    c->audioFrame.timestamp = 0;
+    if (!parseTimeProperty(env, config, "timestamp", &c->audioFrame.timestamp, c))
+      REJECT_RETURN;
+
+    c->frameMetadata.clear();
+    c->audioFrame.p_metadata = nullptr;
+    c->status = napi_get_named_property(env, config, "metadata", &param);
     REJECT_RETURN;
     c->status = napi_typeof(env, param, &type);
     REJECT_RETURN;
     if (type != napi_undefined)
     {
-      if (type == napi_number)
-      {
-        c->status = napi_get_value_int64(env, param, &c->audioFrame.timecode);
-        REJECT_RETURN;
-      }
-      else if (type == napi_bigint)
-      {
-        bool lossless;
-        c->status = napi_get_value_bigint_int64(env, param, &c->audioFrame.timecode, &lossless);
-        REJECT_RETURN;
-      }
-      else
-        REJECT_ERROR_RETURN("timecode value must be a number or bigint", GRANDI_INVALID_ARGS);
+      if (type != napi_string)
+        REJECT_ERROR_RETURN("metadata value must be a string", GRANDI_INVALID_ARGS);
+      size_t metadataLen;
+      c->status = napi_get_value_string_utf8(env, param, nullptr, 0, &metadataLen);
+      REJECT_RETURN;
+      c->frameMetadata.resize(metadataLen + 1);
+      c->status = napi_get_value_string_utf8(env, param, c->frameMetadata.data(), metadataLen + 1, &metadataLen);
+      REJECT_RETURN;
+      c->frameMetadata.resize(metadataLen);
+      c->audioFrame.p_metadata = c->frameMetadata.empty() ? nullptr : c->frameMetadata.c_str();
     }
-
-    /*  initialize also timestamp (receiver-side only) and metadata  */
-    c->audioFrame.timestamp = 0;
-    c->audioFrame.p_metadata = NULL;
 
     c->status = napi_get_named_property(env, config, "channelStrideBytes", &param);
     REJECT_RETURN;
@@ -719,8 +847,10 @@ napi_value audioSend(napi_env env, napi_callback_info info)
     c->status = napi_get_buffer_info(env, audioBuffer, &data, &length);
     REJECT_RETURN;
     c->audioFrame.p_data = (uint8_t *)data;
-    c->status = napi_create_reference(env, audioBuffer, 1, &c->sourceBufferRef);
+    napi_ref bufferRef;
+    c->status = napi_create_reference(env, audioBuffer, 1, &bufferRef);
     REJECT_RETURN;
+    c->passthru = bufferRef;
 
     c->status = napi_get_named_property(env, config, "fourCC", &param);
     REJECT_RETURN;

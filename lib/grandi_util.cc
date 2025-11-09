@@ -279,12 +279,15 @@ bool validAudioFormat(Grandi_audio_format_e format)
 // Make a native source object from components of a source object
 napi_status makeNativeSource(napi_env env, napi_value source, NDIlib_source_t *result)
 {
-  const char *name = nullptr;
-  const char *url = nullptr;
+  result->p_ndi_name = nullptr;
+  result->p_url_address = nullptr;
+
   napi_status status;
   napi_valuetype type;
   napi_value namev, urlv;
   size_t namel, urll;
+  char *name = nullptr;
+  char *url = nullptr;
 
   status = napi_get_named_property(env, source, "name", &namev);
   PASS_STATUS;
@@ -298,8 +301,14 @@ napi_status makeNativeSource(napi_env env, napi_value source, NDIlib_source_t *r
     status = napi_get_value_string_utf8(env, namev, nullptr, 0, &namel);
     PASS_STATUS;
     name = (char *)malloc(namel + 1);
-    status = napi_get_value_string_utf8(env, namev, (char *)name, namel + 1, &namel);
-    PASS_STATUS;
+    if (!name)
+      return napi_generic_failure;
+    status = napi_get_value_string_utf8(env, namev, name, namel + 1, &namel);
+    if (status != napi_ok)
+    {
+      free(name);
+      return status;
+    }
   }
 
   status = napi_typeof(env, urlv, &type);
@@ -309,11 +318,37 @@ napi_status makeNativeSource(napi_env env, napi_value source, NDIlib_source_t *r
     status = napi_get_value_string_utf8(env, urlv, nullptr, 0, &urll);
     PASS_STATUS;
     url = (char *)malloc(urll + 1);
-    status = napi_get_value_string_utf8(env, urlv, (char *)url, urll + 1, &urll);
-    PASS_STATUS;
+    if (!url)
+    {
+      free(name);
+      return napi_generic_failure;
+    }
+    status = napi_get_value_string_utf8(env, urlv, url, urll + 1, &urll);
+    if (status != napi_ok)
+    {
+      free(name);
+      free(url);
+      return status;
+    }
   }
 
   result->p_ndi_name = name;
   result->p_url_address = url;
   return napi_ok;
+}
+
+void freeNativeSource(NDIlib_source_t *result)
+{
+  if (result == nullptr)
+    return;
+  if (result->p_ndi_name != nullptr)
+  {
+    free((void *)result->p_ndi_name);
+    result->p_ndi_name = nullptr;
+  }
+  if (result->p_url_address != nullptr)
+  {
+    free((void *)result->p_url_address);
+    result->p_url_address = nullptr;
+  }
 }

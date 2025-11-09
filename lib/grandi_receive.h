@@ -38,6 +38,7 @@ struct receiveCarrier : carrier
     free(name);
     if (source != nullptr)
     {
+      freeNativeSource(source);
       delete source;
     }
   }
@@ -49,7 +50,7 @@ struct dataCarrier : carrier
   NDIlib_recv_instance_t recv;
   NDIlib_frame_type_e frameType;
   NDIlib_video_frame_v2_t videoFrame;
-  NDIlib_audio_frame_v2_t audioFrame;
+  NDIlib_audio_frame_v3_t audioFrame;
   NDIlib_audio_frame_interleaved_16s_t audioFrame16s;
   NDIlib_audio_frame_interleaved_32f_t audioFrame32fIlvd;
   int32_t referenceLevel = 20;

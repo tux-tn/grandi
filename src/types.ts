@@ -64,6 +64,7 @@ export interface VideoFrame {
 	data: Buffer;
 	timecode?: Timecode;
 	timestamp?: PtpTimestamp;
+	metadata?: string;
 }
 
 export interface ReceivedVideoFrame extends VideoFrame {
@@ -83,6 +84,7 @@ export interface AudioFrame {
 	fourCC: FourCC;
 	timecode?: Timecode;
 	timestamp?: PtpTimestamp;
+	metadata?: string;
 }
 
 export interface ReceivedAudioFrame {
@@ -103,6 +105,7 @@ export interface ReceivedMetadataFrame {
 	type: "metadata";
 	length: number;
 	timecode: PtpTimestamp;
+	timestamp: PtpTimestamp;
 	data: string;
 }
 
@@ -156,6 +159,7 @@ export interface SenderTally {
 export interface Sender {
 	embedded: unknown;
 	name: string;
+	groups?: string;
 	clockVideo: boolean;
 	clockAudio: boolean;
 	video(frame: VideoFrame): Promise<void>;

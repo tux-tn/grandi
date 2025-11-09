@@ -312,6 +312,14 @@ napi_value routing_change(napi_env env, napi_callback_info info)
     napi_valuetype type;
     status = napi_typeof(env, source, &type);
     CHECK_STATUS;
+    if (type == napi_null || type == napi_undefined)
+    {
+        bool cleared = NDIlib_routing_clear(routing);
+        napi_value clearedValue;
+        status = napi_get_boolean(env, cleared, &clearedValue);
+        CHECK_STATUS;
+        return clearedValue;
+    }
     bool isArray;
     status = napi_is_array(env, source, &isArray);
     CHECK_STATUS;
@@ -344,6 +352,7 @@ napi_value routing_change(napi_env env, napi_callback_info info)
     int ok = NDIlib_routing_change(routing, ndi_source);
 
     /*  cleanup resource  */
+    freeNativeSource(ndi_source);
     delete ndi_source;
 
     /*  return a boolean result  */
