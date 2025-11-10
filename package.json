@@ -1,6 +1,6 @@
 {
 	"name": "grandi",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"description": "Node.JS native bindings to the Newtek NDI SDK.",
 	"homepage": "https://github.com/tux-tn/grandi#readme",
 	"keywords": [
