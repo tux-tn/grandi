@@ -16,6 +16,8 @@
 		"binding.gyp",
 		"dist",
 		"lib",
+		"src",
+		"scripts",
 		"LICENSE",
 		"NOTICE",
 		"README.md",
@@ -62,7 +64,7 @@
 	"scripts": {
 		"preinstall": "node scripts/preinstall.mjs",
 		"install": "node-gyp-build",
-		"prebuild:download": "node scripts/prebuild.mjs --force",
+		"prebuild:download": "cross-env NDI_FORCE=1 node scripts/preinstall.mjs",
 		"build": "tsdown",
 		"prebuild": "prebuildify --napi --strip --target=node@20.0.0",
 		"test": "vitest run",

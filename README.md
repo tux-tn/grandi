@@ -285,6 +285,7 @@ Ready to hack on Grandi? Here’s the typical workflow.
 2. **Download the NDI SDK + install deps**
 	- Run `npm install` (or `pnpm install`/`yarn install`). The `scripts/preinstall.mjs` hook downloads and unpacks the official NDI SDK into `ndi/`, then `node-gyp-build` compiles the native addon for your host platform. Re-run `npm install` after deleting `ndi/` if you need to refresh the SDK.
 	- To force-download all prebuild assets for release testing, run `npm run prebuild:download`.
+	- Set `NDI_FORCE=1` if you need to run the downloader in an unpacked tarball (normally it only runs inside the git repo).
 3. **TypeScript build**
 	- `npm run build` compiles `src/` via `tsdown`, emitting ESM/CJS bundles and declaration files in `dist/`.
 	- `npm run prebuild` packages native binaries for distribution (requires the SDK assets fetched earlier).
@@ -294,12 +295,13 @@ Ready to hack on Grandi? Here’s the typical workflow.
 	- `npm test` runs the full Vitest suite (unit + integration stubs).
 	- `npm run test:unit` focuses on pure JS/TS tests.
 	- `RUN_NDI_TESTS=1 npm run test:integration` exercises the native bindings against a real NDI environment; ensure you have available senders/receivers before running.
-	- `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
+  - `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
 6. **Linting & formatting**
 	- `npm run lint` / `npm run format` cover the TypeScript/JavaScript sources via Biome.
 	- `npm run format:cpp` formats the native sources with `clang-format`.
 7. **Manual verification**
 	- `node examples/simple-sender.mjs` and `node examples/simple-receiver.mjs` are quick smoke tests for the send/receive API.
+	- Use `NDI_FORCE=1 npm install` if you need to reassemble the NDI SDK artifacts even when they are already present.
 
 Before opening a pull request, make sure the linter, formatter, and tests all pass, and include context for any platform-specific considerations (e.g., SDK versions, OS dependencies).
 

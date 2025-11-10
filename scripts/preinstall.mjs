@@ -3,11 +3,23 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { pipeline } from "node:stream/promises";
+import { fileURLToPath } from "node:url";
 import zip from "cross-zip";
 import { execa } from "execa";
 import got from "got";
 import shell from "shelljs";
 import tmp from "tmp";
+
+const isRepoCheckout = fs.existsSync(
+	path.join(path.dirname(fileURLToPath(import.meta.url)), "./../.git"),
+);
+const forceRebuild = process.env.NDI_FORCE?.toString() === "1";
+
+if (!isRepoCheckout && !forceRebuild) {
+	console.log("[grandi] Skipping preinstall: running from packaged release.");
+	console.log("[grandi] Set NDI_FORCE=1 to run the downloader manually.");
+	process.exit(0);
+}
 
 // Ensure tmp cleans up on process exit
 tmp.setGracefulCleanup();
@@ -214,7 +226,6 @@ async function main() {
 		return;
 	}
 
-	const forceRebuild = process.env.NDI_FORCE?.toString() === "1";
 	if (!forceRebuild && ndiSubsetPresent() && prebuildsPresent()) {
 		log.success(
 			"NDI SDK subset already present; skipping re-assembly (set NDI_FORCE=1 to force)",
