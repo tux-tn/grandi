@@ -253,8 +253,8 @@ async function main() {
 			shell.rm("-rf", "ndi");
 			shell.mkdir("-p", ["ndi/include", "ndi/lib/win-x86", "ndi/lib/win-x64"]);
 			shell.cp(
-				"-R",
-				path.join(extractDir, "app", "Include", "*"),
+				"-R -v",
+				path.join(extractDir, "app", "Include/"),
 				"ndi/include/",
 			);
 			shell.cp(
