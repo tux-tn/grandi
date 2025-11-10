@@ -186,7 +186,7 @@ function ndiSubsetPresent() {
 		const libDirs = [
 			path.join("ndi", "lib", "win-x86"),
 			path.join("ndi", "lib", "win-x64"),
-			path.join("ndi", "lib", "mac_universal"),
+			path.join("ndi", "lib", "macOS"),
 			path.join("ndi", "lib", "lnx-x86"),
 			path.join("ndi", "lib", "lnx-x64"),
 			path.join("ndi", "lib", "lnx-armv7l"),
@@ -302,14 +302,14 @@ async function main() {
 
 			log.step("Assembling macOS NDI SDK subset");
 			shell.rm("-rf", "ndi");
-			shell.mkdir("-p", ["ndi/include", "ndi/lib/mac_universal"]);
+			shell.mkdir("-p", ["ndi/include", "ndi/lib/macOS"]);
 			shell.mv(
 				path.join(workDir, "NDI SDK for Apple/include/*.h"),
 				"ndi/include/",
 			);
 			shell.mv(
 				path.join(workDir, "NDI SDK for Apple/lib/macOS/*.dylib"),
-				"ndi/lib/mac_universal/",
+				"ndi/lib/macOS/",
 			);
 			shell.mv(
 				path.join(workDir, "NDI SDK for Apple/lib/libndi_licenses.txt"),
