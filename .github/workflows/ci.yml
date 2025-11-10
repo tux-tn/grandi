@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Download NDI SDK assets
+        run: npm run prebuild:download
+
       - name: Type check TypeScript sources
         run: npm exec -- tsc --noEmit -p tsconfig.json
 
@@ -39,6 +42,12 @@ jobs:
 
       - name: Lint with Biome
         run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration tests
+        run: RUN_NDI_TESTS=1 npm run test:integration
 
       - name: Build package typescript sources
         run: npm run build
