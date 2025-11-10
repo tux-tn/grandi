@@ -50,6 +50,7 @@ jobs:
         name: Prebuild binaries for x64 macOS
         run: |
             npm run prebuild -- --arch=x64
+            npm run prebuild -- --arch=ia32
 
       - if: matrix.os == 'windows-latest'
         name: Prebuild binaries for 32-bit Windows
@@ -80,31 +81,22 @@ jobs:
         run: npm install
 
       - name: Download Linux prebuilds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: prebuilds-ubuntu-latest
-          path: artifacts/prebuilds-ubuntu
+          path: prebuilds
 
       - name: Download macOS prebuilds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: prebuilds-macos-latest
-          path: artifacts/prebuilds-macos
+          path: prebuilds
 
       - name: Download Windows prebuilds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: prebuilds-windows-latest
-          path: artifacts/prebuilds-windows
-
-      - name: Merge prebuild artifacts
-        run: |
-          mkdir -p prebuilds
-          for dir in artifacts/prebuilds-*; do
-            if [ -d "$dir/prebuilds" ]; then
-              cp -Rv "$dir/prebuilds/." prebuilds/
-            fi
-          done
+          path: prebuilds
 
       - name: Publish package
         run: npm publish --dry-run
