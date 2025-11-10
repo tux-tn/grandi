@@ -102,7 +102,7 @@ jobs:
           mkdir -p prebuilds
           for dir in artifacts/prebuilds-*; do
             if [ -d "$dir/prebuilds" ]; then
-              cp -R "$dir/prebuilds/." prebuilds/
+              cp -Rv "$dir/prebuilds/." prebuilds/
             fi
           done
 
