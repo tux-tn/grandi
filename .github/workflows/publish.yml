@@ -45,7 +45,6 @@ jobs:
         run: |
             docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-armv7 npm run prebuild
             docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-arm64 npm run prebuild
-            npm run prebuild -- --arch=ia32
 
       - if: matrix.os == 'ubuntu-latest'
         name: Prebuild binaries for x86
