@@ -1,0 +1,112 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+
+jobs:
+  prebuild:
+    name: Prebuild (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.5"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build TypeScript sources
+        run: npm run build
+
+      - name: Prebuild binaries
+        run: npm run prebuild
+
+      - if: matrix.os == 'ubuntu-latest'
+        name: Prebuild binaries for arm64 and armv7l Linux
+        run: |
+            docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-armv7 npm run prebuild
+            docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-arm64 npm run prebuild
+
+      - if: matrix.os == 'macos-latest'
+        name: Prebuild binaries for x64 macOS
+        run: |
+            npm run prebuild -- --arch=x64
+
+      - if: matrix.os == 'windows-latest'
+        name: Prebuild binaries for 32-bit Windows
+        run: |
+            npm run prebuild -- --arch=ia32
+      - name: Upload prebuild artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: prebuilds-${{ matrix.os }}
+          path: prebuilds
+
+  publish:
+    name: Publish to npm
+    needs: prebuild
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.5"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Download Linux prebuilds
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-ubuntu-latest
+          path: artifacts/prebuilds-ubuntu
+
+      - name: Download macOS prebuilds
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-macos-latest
+          path: artifacts/prebuilds-macos
+
+      - name: Download Windows prebuilds
+        uses: actions/download-artifact@v4
+        with:
+          name: prebuilds-windows-latest
+          path: artifacts/prebuilds-windows
+
+      - name: Merge prebuild artifacts
+        run: |
+          mkdir -p prebuilds
+          for dir in artifacts/prebuilds-*; do
+            if [ -d "$dir/prebuilds" ]; then
+              cp -R "$dir/prebuilds/." prebuilds/
+            fi
+          done
+
+      - name: Publish package
+        run: npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
