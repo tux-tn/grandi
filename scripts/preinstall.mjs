@@ -282,6 +282,10 @@ async function main() {
 			shell.rm("-f", ndiExe);
 			shell.rm("-rf", innoDir);
 			shell.rm("-rf", extractDir);
+			log.info("showing assembled NDI SDK subset structure:");
+			shell.ls("-R", "ndi").forEach((line) => {
+				console.log(colors.gray(line));
+			});
 		} else if (platform === "darwin") {
 			const pkgUrl =
 				"https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg";
