@@ -47,10 +47,10 @@ jobs:
             docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-arm64 npm run prebuild
 
       - if: matrix.os == 'ubuntu-latest'
-        name: Prebuild binaries for x86
+        name: Prebuild binaries for x86 Linux
         run: |
             sudo apt-get update
-            sudo apt-get install -y libc6-dev-i386
+            sudo apt-get install -y libc6-dev-i386 g++-13-multilib
             npm run prebuild -- --arch=ia32
 
       - if: matrix.os == 'macos-latest'
@@ -59,7 +59,7 @@ jobs:
             npm run prebuild -- --arch=x64
 
       - if: matrix.os == 'windows-latest'
-        name: Prebuild binaries for 32-bit Windows
+        name: Prebuild binaries for x86 Windows
         run: |
             npm run prebuild -- --arch=ia32
       - name: Upload prebuild artifacts
