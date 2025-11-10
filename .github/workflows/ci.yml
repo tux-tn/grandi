@@ -23,6 +23,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install avahi-daemon on Linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y avahi-daemon libavahi-common3 libavahi-client3
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -30,9 +35,6 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-
-      - name: Download NDI SDK assets
-        run: npm run prebuild:download
 
       - name: Type check TypeScript sources
         run: npm exec -- tsc --noEmit -p tsconfig.json
@@ -43,14 +45,15 @@ jobs:
       - name: Lint with Biome
         run: npm run lint
 
+      - name: Build package typescript sources
+        run: npm run build
+
+      - name: Prebuild Binaries
+        run: npm run prebuild
+      
       - name: Run unit tests
         run: npm run test:unit
 
       - name: Run integration tests
         run: RUN_NDI_TESTS=1 npm run test:integration
 
-      - name: Build package typescript sources
-        run: npm run build
-
-      - name: Prebuild Binaries
-        run: npm run prebuild

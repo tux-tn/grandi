@@ -15,7 +15,7 @@ import type {
 
 const shouldRunIntegration =
 	process.env.RUN_NDI_TESTS === "1" || process.env.RUN_NDI_TESTS === "true";
-
+const isCI = process.env.CI === "true" || process.env.CI === "1";
 const addonCanLoad = (() => {
 	try {
 		nodeGypBuild(path.join(__dirname, "..", ".."));
@@ -126,108 +126,120 @@ describeIntegration("grandi native addon (integration)", () => {
 		expect(Array.isArray(finder.sources())).toBe(true);
 		expect(finder.destroy()).toBe(true);
 	});
-
-	test("can send frames that are received locally", async () => {
-		const senderName = `grandi-vitest-${Date.now()}`;
-		const sender = await grandi.send({
-			name: senderName,
-			clockVideo: true,
-			clockAudio: true,
-		});
-		const controller = { running: true };
-		const pumpTask = pumpFrames(sender, controller);
-		let receiver: Receiver | undefined;
-
-		try {
-			const source = await waitForSourceByName(senderName);
-			receiver = await grandi.receive({
-				source,
-				name: `${senderName}-receiver`,
-				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+	// skip on CI systems where loopback NDI may not be available
+	(isCI ? test.skip : test)(
+		"can send frames that are received locally",
+		async () => {
+			const senderName = `grandi-vitest-${Date.now()}`;
+			const sender = await grandi.send({
+				name: senderName,
+				clockVideo: true,
+				clockAudio: true,
 			});
-			const frame = await receiver.video(5000);
-			assertReceivedVideoFrame(frame);
-			expect(frame.xres).toBe(64);
-			expect(frame.yres).toBe(36);
-			const connections = await sender.connections();
-			expect(connections).toBeGreaterThanOrEqual(1);
+			const controller = { running: true };
+			const pumpTask = pumpFrames(sender, controller);
+			let receiver: Receiver | undefined;
 
-			const tallyInitial = sender.tally();
-			assertTallyShape(tallyInitial);
-			const tallyStable = sender.tally();
-			expect(tallyStable.changed).toBe(false);
+			try {
+				const source = await waitForSourceByName(senderName);
+				receiver = await grandi.receive({
+					source,
+					name: `${senderName}-receiver`,
+					colorFormat: grandi.ColorFormat.BGRX_BGRA,
+				});
+				const frame = await receiver.video(5000);
+				assertReceivedVideoFrame(frame);
+				expect(frame.xres).toBe(64);
+				expect(frame.yres).toBe(36);
+				const connections = await sender.connections();
+				expect(connections).toBeGreaterThanOrEqual(1);
 
-			expect(receiver.tally({ onProgram: true, onPreview: false })).toBe(true);
-			await sleep(200);
-			const tallyProgram = sender.tally();
-			assertTallyShape(tallyProgram);
-			expect(tallyProgram.on_program).toBe(true);
-			expect(tallyProgram.on_preview).toBe(false);
-			expect(tallyProgram.changed).toBe(true);
-			expect(sender.tally().changed).toBe(false);
+				const tallyInitial = sender.tally();
+				assertTallyShape(tallyInitial);
+				const tallyStable = sender.tally();
+				expect(tallyStable.changed).toBe(false);
 
-			expect(receiver.tally({ onProgram: false, onPreview: true })).toBe(true);
-			await sleep(200);
-			const tallyPreview = sender.tally();
-			assertTallyShape(tallyPreview);
-			expect(tallyPreview.on_program).toBe(false);
-			expect(tallyPreview.on_preview).toBe(true);
-			expect(tallyPreview.changed).toBe(true);
-			expect(sender.tally().changed).toBe(false);
-		} finally {
-			controller.running = false;
-			await pumpTask;
-			if (receiver) {
-				receiver.destroy();
+				expect(receiver.tally({ onProgram: true, onPreview: false })).toBe(
+					true,
+				);
 				await sleep(200);
-				const tallyAfterDisconnect = sender.tally();
-				assertTallyShape(tallyAfterDisconnect);
-				expect(tallyAfterDisconnect.changed).toBe(true);
+				const tallyProgram = sender.tally();
+				assertTallyShape(tallyProgram);
+				expect(tallyProgram.on_program).toBe(true);
+				expect(tallyProgram.on_preview).toBe(false);
+				expect(tallyProgram.changed).toBe(true);
 				expect(sender.tally().changed).toBe(false);
+
+				expect(receiver.tally({ onProgram: false, onPreview: true })).toBe(
+					true,
+				);
+				await sleep(200);
+				const tallyPreview = sender.tally();
+				assertTallyShape(tallyPreview);
+				expect(tallyPreview.on_program).toBe(false);
+				expect(tallyPreview.on_preview).toBe(true);
+				expect(tallyPreview.changed).toBe(true);
+				expect(sender.tally().changed).toBe(false);
+			} finally {
+				controller.running = false;
+				await pumpTask;
+				if (receiver) {
+					receiver.destroy();
+					await sleep(200);
+					const tallyAfterDisconnect = sender.tally();
+					assertTallyShape(tallyAfterDisconnect);
+					expect(tallyAfterDisconnect.changed).toBe(true);
+					expect(sender.tally().changed).toBe(false);
+				}
+				sender.destroy();
 			}
-			sender.destroy();
-		}
-	}, 60_000);
+		},
+		60_000,
+	);
 
-	test("can route a source to an output", async () => {
-		const senderName = `grandi-route-${Date.now()}`;
-		const routingName = `${senderName}-routing`;
-		const sender = await grandi.send({
-			name: senderName,
-			clockVideo: true,
-			clockAudio: true,
-		});
-		const controller = { running: true };
-		const pumpTask = pumpFrames(sender, controller);
-		let routing: Awaited<ReturnType<typeof grandi.routing>> | undefined;
-		let routedReceiver: Receiver | undefined;
-
-		try {
-			const source = await waitForSourceByName(senderName);
-			routing = await grandi.routing({ name: routingName });
-			expect(routing.change(source)).toBe(true);
-			expect(routing.sourcename()).toContain(routingName);
-
-			const routedSource = await waitForSourceByName(routingName);
-			routedReceiver = await grandi.receive({
-				source: routedSource,
-				name: `${routingName}-receiver`,
-				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+	(isCI ? test.skip : test)(
+		"can route a source to an output",
+		async () => {
+			const senderName = `grandi-route-${Date.now()}`;
+			const routingName = `${senderName}-routing`;
+			const sender = await grandi.send({
+				name: senderName,
+				clockVideo: true,
+				clockAudio: true,
 			});
+			const controller = { running: true };
+			const pumpTask = pumpFrames(sender, controller);
+			let routing: Awaited<ReturnType<typeof grandi.routing>> | undefined;
+			let routedReceiver: Receiver | undefined;
 
-			const routedFrame = await routedReceiver.video(5000);
-			assertReceivedVideoFrame(routedFrame);
-			expect(routedFrame.xres).toBe(64);
-			expect(routedFrame.yres).toBe(36);
-			expect(routing.connections()).toBeGreaterThanOrEqual(1);
+			try {
+				const source = await waitForSourceByName(senderName);
+				routing = await grandi.routing({ name: routingName });
+				expect(routing.change(source)).toBe(true);
+				expect(routing.sourcename()).toContain(routingName);
 
-			expect(routing.clear()).toBe(true);
-		} finally {
-			controller.running = false;
-			await pumpTask;
-			routedReceiver?.destroy();
-			routing?.destroy();
-			sender.destroy();
-		}
-	}, 60_000);
+				const routedSource = await waitForSourceByName(routingName);
+				routedReceiver = await grandi.receive({
+					source: routedSource,
+					name: `${routingName}-receiver`,
+					colorFormat: grandi.ColorFormat.BGRX_BGRA,
+				});
+
+				const routedFrame = await routedReceiver.video(5000);
+				assertReceivedVideoFrame(routedFrame);
+				expect(routedFrame.xres).toBe(64);
+				expect(routedFrame.yres).toBe(36);
+				expect(routing.connections()).toBeGreaterThanOrEqual(1);
+
+				expect(routing.clear()).toBe(true);
+			} finally {
+				controller.running = false;
+				await pumpTask;
+				routedReceiver?.destroy();
+				routing?.destroy();
+				sender.destroy();
+			}
+		},
+		60_000,
+	);
 });

@@ -134,6 +134,62 @@ const receiver = await grandi.receive({
   allowVideoFields: true,
   name: "rooftop"
 });
+```ts
+try {
+	for (let i = 0; i < 10; i += 1) {
+		const frame = await receiver.video(5_000);
+		console.log(frame);
+	}
+} catch (error) {
+	console.error("Video receive failed", error);
+}
+```
+
+Example frame:
+
+```json
+{
+  "type": "video",
+  "xres": 1920,
+  "yres": 1080,
+  "frameRateN": 30000,
+  "frameRateD": 1001,
+  "pictureAspectRatio": 1.7778,
+  "timestamp": [1538569443, 717845600],
+  "frameFormatType": 1,
+  "timecode": [0, 0],
+  "lineStrideBytes": 3840,
+  "data": "<Buffer …>"
+}
+```
+
+**Audio** — choose formats with `audioFormat` and `referenceLevel`:
+
+```ts
+const audioFrame = await receiver.audio(
+	{
+		audioFormat: grandi.AudioFormat.Int16Interleaved,
+		referenceLevel: 0, // dB above +4dBu
+	},
+	8_000,
+);
+```
+
+Example frame:
+
+```json
+{
+  "type": "audio",
+  "audioFormat": 2,
+  "referenceLevel": 0,
+  "sampleRate": 48000,
+  "channels": 4,
+  "samples": 4800,
+  "channelStrideInBytes": 9600,
+  "timestamp": [1538578787, 132614500],
+  "timecode": [0, 800000000],
+  "data": "<Buffer …>"
+}
 ```
 
 #### Video
