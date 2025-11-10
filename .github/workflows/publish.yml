@@ -104,8 +104,11 @@ jobs:
           name: prebuilds-windows-latest
           path: prebuilds
 
+      - name: bundle typescript sources
+        run: npm run build
+
       - if: github.event_name != 'workflow_dispatch'
         name: Publish package
-        run: npm publish --provenance --access public
+        run: npm publish --provenance
         env:
             NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
