@@ -172,6 +172,7 @@ export interface Sender {
 	video(frame: VideoFrame): Promise<void>;
 	audio(frame: AudioFrame): Promise<void>;
 	connections(): number;
+	metadata(data: string): boolean;
 	tally(): SenderTally;
 	sourcename(): string;
 	destroy(): boolean;

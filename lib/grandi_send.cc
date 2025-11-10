@@ -30,106 +30,107 @@
 napi_value videoSend(napi_env env, napi_callback_info info);
 napi_value audioSend(napi_env env, napi_callback_info info);
 napi_value connections(napi_env env, napi_callback_info info);
+napi_value metadataSend(napi_env env, napi_callback_info info);
 napi_value tally(napi_env env, napi_callback_info info);
 napi_value sourcename(napi_env env, napi_callback_info info);
 
 namespace
 {
-bool getInt64FromValue(napi_env env, napi_value value, int64_t *out, carrier *c, const char *propName)
-{
-  napi_valuetype type;
-  c->status = napi_typeof(env, value, &type);
-  if (c->status != napi_ok)
-    return false;
-  if (type == napi_number)
+  bool getInt64FromValue(napi_env env, napi_value value, int64_t *out, carrier *c, const char *propName)
   {
-    c->status = napi_get_value_int64(env, value, out);
-    return c->status == napi_ok;
-  }
-  if (type == napi_bigint)
-  {
-    bool lossless;
-    c->status = napi_get_value_bigint_int64(env, value, out, &lossless);
-    return c->status == napi_ok;
-  }
-  c->errorMsg = std::string(propName) + " value must be a number, bigint, or a [seconds,nanoseconds] tuple.";
-  c->status = GRANDI_INVALID_ARGS;
-  return false;
-}
-
-bool parsePtpTimestampArray(napi_env env, napi_value value, int64_t *out, carrier *c, const char *propName)
-{
-  bool isArray;
-  c->status = napi_is_array(env, value, &isArray);
-  if (c->status != napi_ok)
-    return false;
-  if (!isArray)
-  {
-    c->errorMsg = std::string(propName) + " value must be a [seconds,nanoseconds] array.";
-    c->status = GRANDI_INVALID_ARGS;
-    return false;
-  }
-
-  uint32_t length;
-  c->status = napi_get_array_length(env, value, &length);
-  if (c->status != napi_ok)
-    return false;
-  if (length < 2)
-  {
-    c->errorMsg = std::string(propName) + " array must contain two numeric entries.";
-    c->status = GRANDI_INVALID_ARGS;
-    return false;
-  }
-
-  napi_value secsValue, nanosValue;
-  c->status = napi_get_element(env, value, 0, &secsValue);
-  if (c->status != napi_ok)
-    return false;
-  c->status = napi_get_element(env, value, 1, &nanosValue);
-  if (c->status != napi_ok)
-    return false;
-
-  int64_t seconds = 0;
-  if (!getInt64FromValue(env, secsValue, &seconds, c, propName))
-    return false;
-
-  int64_t nanos = 0;
-  if (!getInt64FromValue(env, nanosValue, &nanos, c, propName))
-    return false;
-
-  int64_t hundredNsFromSeconds = seconds * 10000000LL;
-  int64_t hundredNsFromNanos = nanos / 100LL;
-  *out = hundredNsFromSeconds + hundredNsFromNanos;
-  return true;
-}
-
-bool parseTimeProperty(napi_env env, napi_value object, const char *propName, int64_t *target, carrier *c)
-{
-  napi_value property;
-  c->status = napi_get_named_property(env, object, propName, &property);
-  if (c->status != napi_ok)
-    return false;
-
-  napi_valuetype type;
-  c->status = napi_typeof(env, property, &type);
-  if (c->status != napi_ok)
-    return false;
-
-  if (type == napi_undefined)
-    return true;
-
-  if (type == napi_object)
-  {
-    bool isArray;
-    c->status = napi_is_array(env, property, &isArray);
+    napi_valuetype type;
+    c->status = napi_typeof(env, value, &type);
     if (c->status != napi_ok)
       return false;
-    if (isArray)
-      return parsePtpTimestampArray(env, property, target, c, propName);
+    if (type == napi_number)
+    {
+      c->status = napi_get_value_int64(env, value, out);
+      return c->status == napi_ok;
+    }
+    if (type == napi_bigint)
+    {
+      bool lossless;
+      c->status = napi_get_value_bigint_int64(env, value, out, &lossless);
+      return c->status == napi_ok;
+    }
+    c->errorMsg = std::string(propName) + " value must be a number, bigint, or a [seconds,nanoseconds] tuple.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
   }
 
-  return getInt64FromValue(env, property, target, c, propName);
-}
+  bool parsePtpTimestampArray(napi_env env, napi_value value, int64_t *out, carrier *c, const char *propName)
+  {
+    bool isArray;
+    c->status = napi_is_array(env, value, &isArray);
+    if (c->status != napi_ok)
+      return false;
+    if (!isArray)
+    {
+      c->errorMsg = std::string(propName) + " value must be a [seconds,nanoseconds] array.";
+      c->status = GRANDI_INVALID_ARGS;
+      return false;
+    }
+
+    uint32_t length;
+    c->status = napi_get_array_length(env, value, &length);
+    if (c->status != napi_ok)
+      return false;
+    if (length < 2)
+    {
+      c->errorMsg = std::string(propName) + " array must contain two numeric entries.";
+      c->status = GRANDI_INVALID_ARGS;
+      return false;
+    }
+
+    napi_value secsValue, nanosValue;
+    c->status = napi_get_element(env, value, 0, &secsValue);
+    if (c->status != napi_ok)
+      return false;
+    c->status = napi_get_element(env, value, 1, &nanosValue);
+    if (c->status != napi_ok)
+      return false;
+
+    int64_t seconds = 0;
+    if (!getInt64FromValue(env, secsValue, &seconds, c, propName))
+      return false;
+
+    int64_t nanos = 0;
+    if (!getInt64FromValue(env, nanosValue, &nanos, c, propName))
+      return false;
+
+    int64_t hundredNsFromSeconds = seconds * 10000000LL;
+    int64_t hundredNsFromNanos = nanos / 100LL;
+    *out = hundredNsFromSeconds + hundredNsFromNanos;
+    return true;
+  }
+
+  bool parseTimeProperty(napi_env env, napi_value object, const char *propName, int64_t *target, carrier *c)
+  {
+    napi_value property;
+    c->status = napi_get_named_property(env, object, propName, &property);
+    if (c->status != napi_ok)
+      return false;
+
+    napi_valuetype type;
+    c->status = napi_typeof(env, property, &type);
+    if (c->status != napi_ok)
+      return false;
+
+    if (type == napi_undefined)
+      return true;
+
+    if (type == napi_object)
+    {
+      bool isArray;
+      c->status = napi_is_array(env, property, &isArray);
+      if (c->status != napi_ok)
+        return false;
+      if (isArray)
+        return parsePtpTimestampArray(env, property, target, c, propName);
+    }
+
+    return getInt64FromValue(env, property, target, c, propName);
+  }
 }
 
 void sendExecute(napi_env env, void *data)
@@ -260,6 +261,13 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data)
   c->status = napi_set_named_property(env, result, "audio", audioFn);
   REJECT_STATUS;
 
+  napi_value metadataFn;
+  c->status = napi_create_function(env, "metadata", NAPI_AUTO_LENGTH, metadataSend,
+                                   nullptr, &metadataFn);
+  REJECT_STATUS;
+  c->status = napi_set_named_property(env, result, "metadata", metadataFn);
+  REJECT_STATUS;
+
   napi_value connectionsFn;
   c->status = napi_create_function(env, "connections", NAPI_AUTO_LENGTH, connections,
                                    nullptr, &connectionsFn);
@@ -280,20 +288,6 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data)
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "sourcename", sourcenameFn);
   REJECT_STATUS;
-
-  // napi_value metadataFn;
-  // c->status = napi_create_function(env, "metadata", NAPI_AUTO_LENGTH, metadataReceive,
-  //   nullptr, &metadataFn);
-  // REJECT_STATUS;
-  // c->status = napi_set_named_property(env, result, "metadata", metadataFn);
-  // REJECT_STATUS;
-
-  // napi_value dataFn;
-  // c->status = napi_create_function(env, "data", NAPI_AUTO_LENGTH, dataReceive,
-  //   nullptr, &dataFn);
-  // REJECT_STATUS;
-  // c->status = napi_set_named_property(env, result, "data", dataFn);
-  // REJECT_STATUS;
 
   napi_value name, groups, clockVideo, clockAudio;
   c->status = napi_create_string_utf8(env, c->name, NAPI_AUTO_LENGTH, &name);
@@ -931,6 +925,54 @@ napi_value tally(napi_env env, napi_callback_info info)
   status = napi_set_named_property(env, result, "on_preview", value);
   CHECK_STATUS;
 
+  return result;
+}
+
+napi_value metadataSend(napi_env env, napi_callback_info info)
+{
+  napi_status status;
+
+  size_t argc = 1;
+  napi_value args[1];
+  napi_value thisValue;
+  status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
+  CHECK_STATUS;
+
+  if (argc != 1)
+    NAPI_THROW_ERROR("metadata requires a single string argument.");
+
+  napi_value sendValue;
+  status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
+  CHECK_STATUS;
+  void *sendData;
+  status = napi_get_value_external(env, sendValue, &sendData);
+  CHECK_STATUS;
+  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendData;
+
+  napi_valuetype type;
+  status = napi_typeof(env, args[0], &type);
+  CHECK_STATUS;
+  if (type != napi_string)
+    NAPI_THROW_ERROR("metadata argument must be a string.");
+
+  size_t length;
+  status = napi_get_value_string_utf8(env, args[0], nullptr, 0, &length);
+  CHECK_STATUS;
+  std::string metadata(length + 1, '\0');
+  status = napi_get_value_string_utf8(env, args[0], metadata.data(), length + 1, &length);
+  CHECK_STATUS;
+  metadata.resize(length);
+
+  NDIlib_metadata_frame_t frame;
+  frame.length = static_cast<int>(metadata.length());
+  frame.timecode = NDIlib_send_timecode_synthesize;
+  frame.p_data = const_cast<char *>(metadata.c_str());
+
+  NDIlib_send_send_metadata(sender, &frame);
+
+  napi_value result;
+  status = napi_get_boolean(env, true, &result);
+  CHECK_STATUS;
   return result;
 }
 
