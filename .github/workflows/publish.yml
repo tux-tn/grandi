@@ -47,6 +47,13 @@ jobs:
             docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-arm64 npm run prebuild
             npm run prebuild -- --arch=ia32
 
+      - if: matrix.os == 'ubuntu-latest'
+        name: Prebuild binaries for x86
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y libc6-dev-i386
+            npm run prebuild -- --arch=ia32
+
       - if: matrix.os == 'macos-latest'
         name: Prebuild binaries for x64 macOS
         run: |
