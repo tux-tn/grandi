@@ -1,4 +1,7 @@
+[![npm version](https://badgen.net/npm/v/grandi)](https://www.npmjs.com/package/grandi) [![CI](https://github.com/tux-tn/grandi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tux-tn/grandi/actions/workflows/ci.yml)
+
 # Grandi
+
 Grandi is a TypeScript-first native Node.js binding for NewTek NDI™  6. It exposes the full NDI 6 SDK surface area through a Promise-based API, providing strongly typed helpers for sending and receiving professional video, audio, metadata, and tally data from Node.js applications. For more information on NDI™ , see <https://www.ndi.tv/>.
 
 ## Why this fork?
@@ -53,7 +56,7 @@ On Windows, you only need the Visual Studio 2013 C run-times when building from 
 
 Grandi is designed to be `require`d or `import`ed from your own applications:
 
-```typescript
+```ts
 import grandi from "grandi";
 // or
 const grandi = require("grandi");
@@ -68,7 +71,7 @@ This module allows a Node.js program to find, receive, and send NDI™ video, au
 ### Finding streams
 `grandi.find` resolves to a finder handle that can block for network updates and expose the discovered sources:
 
-```javascript
+```ts
 import { setTimeout as sleep } from "node:timers/promises";
 import grandi from "grandi";
 
@@ -90,7 +93,7 @@ async function pickSource() {
 
 `find` accepts a single options object. Common filters:
 
-```javascript
+```ts
 await grandi.find({
   showLocalSources: true,                 // include sources on the same machine
   groups: "studio3",                      // comma-separated list of group names
@@ -101,20 +104,20 @@ await grandi.find({
 ### Receiving streams
 First, find a stream or construct a `Source` object:
 
-```javascript
+```ts
 const grandi = require("grandi");
 const source = { name: "<source_name>", urlAddress: "<ip>:<port>" };
 ```
 
 Create a receiver:
 
-```javascript
+```ts
 const receiver = await grandi.receive({ source });
 ```
 
 Example receiver object:
 
-```javascript
+```ts
 {
   embedded: [External],
   video: [Function],
@@ -130,7 +133,7 @@ Example receiver object:
 
 Configure receivers via options:
 
-```javascript
+```ts
 const receiver = await grandi.receive({
   source,
   colorFormat: grandi.COLOR_FORMAT_UYVY_RGBA,
@@ -143,7 +146,7 @@ const receiver = await grandi.receive({
 
 #### Video
 
-```javascript
+```ts
 const timeout = 5000;
 try {
   for (let i = 0; i < 10; i++) {
@@ -157,7 +160,7 @@ try {
 
 Example frame:
 
-```javascript
+```ts
 {
   type: "video",
   xres: 1920,
@@ -175,7 +178,7 @@ Example frame:
 
 #### Audio
 
-```javascript
+```ts
 const audioFrame = await receiver.audio(
   {
     audioFormat: grandi.AUDIO_FORMAT_INT_16_INTERLEAVED,
@@ -187,7 +190,7 @@ const audioFrame = await receiver.audio(
 
 Example result:
 
-```javascript
+```ts
 {
   type: "audio",
   audioFormat: grandi.AUDIO_FORMAT_INT_16_INTERLEAVED,
@@ -204,7 +207,7 @@ Example result:
 
 #### Metadata
 
-```javascript
+```ts
 const metadataFrame = await receiver.metadata();
 ```
 
@@ -212,7 +215,7 @@ Returns a `{ type: "metadata", data: string, ... }` frame, typically XML.
 
 #### Next available data
 
-```javascript
+```ts
 const prefs = { audioFormat: grandi.AUDIO_FORMAT_FLOAT_32_SEPARATE };
 const payload = await receiver.data(prefs, 1000); // 1s timeout
 if (payload.type === "video") {
@@ -225,7 +228,7 @@ if (payload.type === "video") {
 ### Sending streams
 Sending is fully supported. Call `grandi.send` with a `SendOptions` object to create a `Sender` instance capable of video, audio, metadata, and tally interactions:
 
-```javascript
+```ts
 const sender = await grandi.send({
   name: "grandi-demo",
   groups: "studio3",
@@ -314,70 +317,91 @@ Before opening a pull request, make sure the linter, formatter, and tests all pa
 This section documents every exported method and type surfaced by the module. Refer to `src/index.ts` and `src/types.ts` for authoritative definitions.
 
 ### Module exports
-- `find(options?: FindOptions): Promise<Finder>` — discover available NDI sources, optionally filtering by groups, local visibility, or explicit IPs. Resolves to a finder handle whose `sources()` method returns the latest snapshot.
-- `receive(options: ReceiveOptions): Promise<Receiver>` — create a receiver bound to a specific `Source`. Customize color format, bandwidth caps, interlaced support, and a friendly name.
-- `send(options: SendOptions): Promise<Sender>` — create a sender that can push video, audio, metadata, and tally updates into the NDI network.
-- `routing(params: { name?: string; groups?: string }): Promise<Routing>` — build an NDI router that can switch downstream destinations to new sources via `routing.change`.
-- `initialize(): boolean` / `destroy(): boolean` — manually initialize or tear down the shared NDI state. Automatically handled when using `send`/`receive`, but exposed for completeness.
-- `version(): string` — report the bundled NDI SDK version.
-- `isSupportedCPU(): boolean` — guard call that reports whether the host CPU meets the NDI SDK requirements.
-- Enum exports: `ColorFormat`, `AudioFormat`, `Bandwidth`, `FrameType`, `FourCC`.
-- Default export: the `grandi` object containing the methods above plus constant aliases such as `COLOR_FORMAT_FASTEST`, `BANDWIDTH_HIGHEST`, etc.
+
+| Export | Returns | Purpose |
+| --- | --- | --- |
+| `find(options?: FindOptions)` | `Promise<Finder>` | Discover available NDI sources, optionally filtering by groups, local visibility, or explicit IPs. Resolves to a finder whose `sources()` method exposes the latest snapshot. |
+| `receive(options: ReceiveOptions)` | `Promise<Receiver>` | Create a receiver bound to a specific `Source` with optional color format, bandwidth, interlaced, and naming tweaks. |
+| `send(options: SendOptions)` | `Promise<Sender>` | Create a sender that can push video, audio, metadata, and tally updates into the NDI network. |
+| `routing(params: { name?: string; groups?: string })` | `Promise<Routing>` | Build an NDI router that can switch downstream destinations to new sources via `routing.change`. |
+| `initialize()` / `destroy()` | `boolean` | Manually initialize or tear down the shared NDI state; normally handled automatically by `send`/`receive`. |
+| `version()` | `string` | Report the bundled NDI SDK version. |
+| `isSupportedCPU()` | `boolean` | Guard call to confirm the host CPU meets the NDI SDK requirements. |
+| `ColorFormat`, `AudioFormat`, `Bandwidth`, `FrameType`, `FourCC` | enums | Enumerations re-exported for convenience (also mirrored as constants on the default export). |
+| `default` | `typeof grandi` | The `grandi` object containing the methods above plus constant aliases such as `COLOR_FORMAT_FASTEST`, `BANDWIDTH_HIGHEST`, etc. |
 
 ### Receiver interface
 `Receiver` instances expose:
 
-- `video(timeoutMs?: number): Promise<ReceivedVideoFrame>` — obtain the next video frame.
-- `audio(optionsOrTimeout?: AudioReceiveOptions | number, timeoutMs?: number): Promise<ReceivedAudioFrame>` — fetch audio, optionally overriding format or reference level per call.
-- `metadata(timeoutMs?: number): Promise<ReceivedMetadataFrame>` — resolve metadata frames (strings, typically XML).
-- `data(optionsOrTimeout?: AudioReceiveOptions | number, timeoutMs?: number): Promise<ReceiverDataFrame>` — return whichever payload (video, audio, metadata, source change, status change) arrives first.
-- `tally(state: ReceiverTallyState): boolean` — push tally states (program/preview) upstream to the sender.
-- `destroy(): boolean` — release the underlying NDI receiver.
-- Properties: `embedded`, `source`, `colorFormat`, `bandwidth`, `allowVideoFields`, `name`.
+| Call | Returns | Purpose |
+| --- | --- | --- |
+| `video(timeoutMs?: number)` | `Promise<ReceivedVideoFrame>` | Resolve with the next available video frame. |
+| `audio(optionsOrTimeout?: AudioReceiveOptions \| number, timeoutMs?: number)` | `Promise<ReceivedAudioFrame>` | Fetch audio, overriding format/reference level per call if desired. |
+| `metadata(timeoutMs?: number)` | `Promise<ReceivedMetadataFrame>` | Receive metadata frames (XML strings). |
+| `data(optionsOrTimeout?: AudioReceiveOptions \| number, timeoutMs?: number)` | `Promise<ReceiverDataFrame>` | Return whichever payload (video/audio/metadata/source change/status change) arrives first. |
+| `tally(state: ReceiverTallyState)` | `boolean` | Push tally states (program/preview) upstream to the sender. |
+| `destroy()` | `boolean` | Release the underlying NDI receiver resources. |
+
+Properties: `embedded`, `source`, `colorFormat`, `bandwidth`, `allowVideoFields`, `name`.
 
 ### Sender interface
 `Sender` instances surface:
 
-- `video(frame: VideoFrame): Promise<void>` — send a video frame.
-- `audio(frame: AudioFrame): Promise<void>` — send an audio frame.
-- `metadata(data: string): boolean` — send metadata strings (XML).
-- `tally(): SenderTally` — retrieve current tally state (program/preview booleans plus `changed` flag).
-- `connections(): number` — how many actively connected receivers see this sender.
-- `sourcename(): string` — fully qualified source name visible on the network.
-- `destroy(): boolean` — dispose the sender and release network resources.
-- Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
+| Call | Returns | Purpose |
+| --- | --- | --- |
+| `video(frame: VideoFrame)` | `Promise<void>` | Send a video frame into the NDI network. |
+| `audio(frame: AudioFrame)` | `Promise<void>` | Send an audio frame. |
+| `metadata(data: string)` | `boolean` | Push metadata strings (XML). |
+| `tally()` | `SenderTally` | Retrieve current tally state (program/preview booleans plus `changed`). |
+| `connections()` | `number` | Report how many receivers are actively connected. |
+| `sourcename()` | `string` | Fully qualified source name visible on the network. |
+| `destroy()` | `boolean` | Dispose the sender and release network resources. |
+
+Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 
 ### Routing interface
-- `change(source: Source): boolean` — switch destinations to a new source.
-- `clear(): boolean` — disconnect the current source.
-- `connections(): number` — monitor downstream subscriptions.
-- `sourcename(): string` — current routed source name.
-- `destroy(): boolean` — cleanly shut down.
+
+| Call | Returns | Purpose |
+| --- | --- | --- |
+| `change(source: Source)` | `boolean` | Switch downstream destinations to a new source. |
+| `clear()` | `boolean` | Disconnect the current source. |
+| `connections()` | `number` | Monitor downstream subscriptions. |
+| `sourcename()` | `string` | Current routed source name. |
+| `destroy()` | `boolean` | Cleanly shut down the router. |
 
 ### Finder interface
-- `sources(): Source[]` — latest snapshot of discovered sources.
-- `wait(timeoutMs?: number): boolean` — block for network updates up to the given timeout.
-- `destroy(): boolean` — dispose the finder and associated background threads.
+
+| Call | Returns | Purpose |
+| --- | --- | --- |
+| `sources()` | `Source[]` | Latest snapshot of discovered sources. |
+| `wait(timeoutMs?: number)` | `boolean` | Block for network updates up to the given timeout. |
+| `destroy()` | `boolean` | Dispose the finder and background threads. |
 
 ### Options and helper types
-- `Source` — `{ name: string; urlAddress?: string }`.
-- `FindOptions` — `{ showLocalSources?: boolean; groups?: string; extraIPs?: string; }`.
-- `ReceiveOptions` — `{ source: Source; colorFormat?: ColorFormat; bandwidth?: Bandwidth; allowVideoFields?: boolean; name?: string; }`.
-- `SendOptions` — `{ name: string; groups?: string; clockVideo?: boolean; clockAudio?: boolean; }`.
-- `AudioReceiveOptions` — `{ audioFormat?: AudioFormat; referenceLevel?: number; }` used when calling `receiver.audio` or `receiver.data`.
-- `ReceiverTallyState` — `{ onProgram?: boolean; onPreview?: boolean; }`, used by `receiver.tally`.
-- `SenderTally` — `{ changed: boolean; on_program: boolean; on_preview: boolean; }`, returned by `sender.tally`.
-- `PtpTimestamp` — `[seconds, nanoseconds]` tuple aligning with the NDI SDK timestamp APIs.
-- `Timecode` — `bigint | number | PtpTimestamp`, matching how timecodes are expressed throughout the SDK.
+
+| Type | Shape | Notes |
+| --- | --- | --- |
+| `Source` | `{ name: string; urlAddress?: string }` | Identifies an NDI endpoint. |
+| `FindOptions` | `{ showLocalSources?: boolean; groups?: string; extraIPs?: string; }` | Filters applied when discovering sources. |
+| `ReceiveOptions` | `{ source: Source; colorFormat?: ColorFormat; bandwidth?: Bandwidth; allowVideoFields?: boolean; name?: string; }` | Required to create receivers with optional overrides. |
+| `SendOptions` | `{ name: string; groups?: string; clockVideo?: boolean; clockAudio?: boolean; }` | Configure sender identity and sync behavior. |
+| `AudioReceiveOptions` | `{ audioFormat?: AudioFormat; referenceLevel?: number; }` | Used when calling `receiver.audio` or `receiver.data`. |
+| `ReceiverTallyState` | `{ onProgram?: boolean; onPreview?: boolean; }` | Provided to `receiver.tally` to reflect monitoring state. |
+| `SenderTally` | `{ changed: boolean; on_program: boolean; on_preview: boolean; }` | Returned by `sender.tally`. |
+| `PtpTimestamp` | `[seconds, nanoseconds]` | Tuple aligning with the NDI SDK timestamp APIs. |
+| `Timecode` | `bigint \| number \| PtpTimestamp` | Matches how timecodes are expressed throughout the SDK. |
 
 ### Frame payload types
-- `VideoFrame` — describes outbound frames: resolution, frame rate (`frameRateN`, `frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `timestamp`, `metadata`.
-- `ReceivedVideoFrame` — extends `VideoFrame` with guaranteed `type: "video"` plus non-optional `timecode`/`timestamp`.
-- `AudioFrame` — outbound audio payload (sample rate, number of channels/samples, stride, `data`, `fourCC`, optional timing/metadata).
-- `ReceivedAudioFrame` — inbound audio payload including `audioFormat`, `referenceLevel`, `timecode`, `timestamp`.
-- `ReceivedMetadataFrame` — metadata payloads (`type: "metadata"`, `length`, `timecode`, `timestamp`, `data` string).
-- `ReceiverDataFrame` — discriminated union of `ReceivedVideoFrame | ReceivedAudioFrame | ReceivedMetadataFrame | SourceChangeEvent | StatusChangeEvent`.
-- `SourceChangeEvent` / `StatusChangeEvent` — internal notifications delivered via `receiver.data` when the remote sender changes or becomes unavailable.
+
+| Type | Description |
+| --- | --- |
+| `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `timestamp`, `metadata`. |
+| `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"` and non-optional `timecode`/`timestamp`. |
+| `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC`, optional timing/metadata. |
+| `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, `timecode`, `timestamp`. |
+| `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, `timecode`, `timestamp`, `data` string). |
+| `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent`. |
+| `SourceChangeEvent` / `StatusChangeEvent` | Internal notifications delivered via `receiver.data` when the remote sender changes or becomes unavailable. |
 
 ### Enum reference
 - `ColorFormat` — enumerates `BGRX_BGRA`, `UYVY_BGRA`, `RGBX_RGBA`, `UYVY_RGBA`, `Fastest`, `Best`, and `BGRX_BGRA_FLIPPED`. The `grandi.COLOR_FORMAT_*` constants map to these values.
@@ -396,7 +420,7 @@ Apart from the exceptions below, this software is released under the Apache 2.0 
 The software uses libraries provided under a royalty-free license from NewTek, Inc. (see the [NDI SDK License](https://ndi.link/ndisdk_license) for full terms):
 
 - The `ndi/include` includes files are licensed separately by NewTek under the MIT license.
-- The DLL and library files are provided for installation convenience and are covered by the NewTek license in the `prebuild/` folder.
+- The DLL and library files are provided for installation convenience and are covered by the NewTek license in the `prebuilds/` folder.
 
 ## Trademarks
 NDI™  is a trademark of NewTek, Inc.
