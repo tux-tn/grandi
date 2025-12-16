@@ -56,8 +56,7 @@ char *custom_itoa(int num, char *str, int base) {
 
   str[i] = '\0'; // Append string terminator
 
-  // Reverse the string
-  std::reverse(std::string(str).begin(), std::string(str).end());
+  std::reverse(str, str + i);
 
   return str;
 }
@@ -196,7 +195,7 @@ int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line) {
     status = napi_reject_deferred(env, c->_deferred, errorValue);
     FLOATING_STATUS;
 
-    // free(extMsg);
+    free(extMsg);
     tidyCarrier(env, c);
   }
   return c->status;
