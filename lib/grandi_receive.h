@@ -49,8 +49,8 @@ struct dataCarrier : carrier {
   NDIlib_frame_type_e frameType;
   NDIlib_video_frame_v2_t videoFrame;
   NDIlib_audio_frame_v3_t audioFrame;
-  NDIlib_audio_frame_interleaved_16s_t audioFrame16s;
-  NDIlib_audio_frame_interleaved_32f_t audioFrame32fIlvd;
+  NDIlib_audio_frame_interleaved_16s_t audioFrame16s{};
+  NDIlib_audio_frame_interleaved_32f_t audioFrame32fIlvd{};
   int32_t referenceLevel = 20;
   Grandi_audio_format_e audioFormat = Grandi_audio_format_float_32_separate;
   NDIlib_metadata_frame_t metadataFrame;

@@ -134,7 +134,7 @@ bool parseTimeProperty(napi_env env, napi_value object, const char *propName,
 void sendExecute(napi_env env, void *data) {
   sendCarrier *c = (sendCarrier *)data;
 
-  NDIlib_send_create_t NDI_send_create_desc;
+  NDIlib_send_create_t NDI_send_create_desc{};
 
   NDI_send_create_desc.p_ndi_name = c->name;
   NDI_send_create_desc.p_groups = c->groups;
