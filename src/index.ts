@@ -10,6 +10,10 @@ import {
 	FrameType,
 } from "./types";
 
+/**
+ * Checks if the current platform and architecture are supported by NDI.
+ * @returns {boolean} True if the platform is supported (darwin, linux, or win32 with ia32/x64), false otherwise.
+ */
 function isSupportedPlatform(): boolean {
 	return (
 		process.platform === "darwin" ||
@@ -49,16 +53,67 @@ const addon: T.GrandiAddon = isSupportedPlatform()
 	? (nodeGypBuild(path.join(__dirname, "..")) as T.GrandiAddon)
 	: noopAddon;
 
+/**
+ * Creates a finder to discover NDI sources on the network.
+ * @param {T.FindOptions} [params={}] - Options for finding sources.
+ * @param {boolean} [params.showLocalSources] - Whether to show local sources.
+ * @param {string} [params.groups] - Multicast groups to search in.
+ * @param {string} [params.extraIPs] - Additional IP addresses to search.
+ * @returns {Promise<T.Finder>} A promise that resolves to a Finder instance for discovering sources.
+ */
 export function find(params: T.FindOptions = {}): Promise<T.Finder> {
 	return addon.find(params);
 }
 // Named runtime exports
+/**
+ * Gets the version of the NDI SDK.
+ * @returns {string} The NDI SDK version string.
+ */
 export const version = addon.version;
+/**
+ * Checks if the current CPU architecture is supported by NDI.
+ * @returns {boolean} True if the CPU is supported, false otherwise.
+ */
 export const isSupportedCPU = addon.isSupportedCPU;
+/**
+ * Initializes the NDI library. Must be called before using any other NDI functions.
+ * @returns {boolean} True if initialization was successful, false otherwise.
+ */
 export const initialize = addon.initialize;
+/**
+ * Destroys the NDI library instance and cleans up resources.
+ * Should be called when done using NDI to free resources.
+ * @returns {boolean} True if destruction was successful, false otherwise.
+ */
 export const destroy = addon.destroy;
+/**
+ * Creates an NDI sender for transmitting video and audio over the network.
+ * @param {T.SendOptions} params - Options for creating the sender.
+ * @param {string} params.name - The name of the NDI source.
+ * @param {string} [params.groups] - Multicast groups to send to.
+ * @param {boolean} [params.clockVideo] - Whether to clock video frames.
+ * @param {boolean} [params.clockAudio] - Whether to clock audio frames.
+ * @returns {Promise<T.Sender>} A promise that resolves to a Sender instance for transmitting data.
+ */
 export const send = addon.send;
+/**
+ * Creates an NDI receiver for receiving video and audio from an NDI source.
+ * @param {T.ReceiveOptions} params - Options for creating the receiver.
+ * @param {T.Source} params.source - The NDI source to connect to.
+ * @param {T.ColorFormat} [params.colorFormat] - The color format for received video.
+ * @param {T.Bandwidth} [params.bandwidth] - The bandwidth limitation for the connection.
+ * @param {boolean} [params.allowVideoFields] - Whether to allow video fields.
+ * @param {string} [params.name] - The name for the receiver.
+ * @returns {Promise<T.Receiver>} A promise that resolves to a Receiver instance for receiving data.
+ */
 export const receive = addon.receive;
+/**
+ * Creates an NDI router for switching between different NDI sources.
+ * @param {Object} params - Options for creating the router.
+ * @param {string} [params.name] - The name for the router.
+ * @param {string} [params.groups] - Multicast groups for the router.
+ * @returns {Promise<T.Routing>} A promise that resolves to a Routing instance for source switching.
+ */
 export const routing = addon.routing;
 
 // Re-export enums and types for convenient named imports
