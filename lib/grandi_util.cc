@@ -207,6 +207,7 @@ bool validColorFormat(NDIlib_recv_color_format_e format) {
   case NDIlib_recv_color_format_UYVY_BGRA:
   case NDIlib_recv_color_format_RGBX_RGBA:
   case NDIlib_recv_color_format_UYVY_RGBA:
+  case NDIlib_recv_color_format_best:
   case NDIlib_recv_color_format_fastest:
 #ifdef _WIN32
   case NDIlib_recv_color_format_BGRX_BGRA_flipped:
