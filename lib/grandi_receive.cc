@@ -14,6 +14,7 @@
 */
 
 #include <chrono>
+#include <cstddef>
 #include <Processing.NDI.Lib.h>
 #include <inttypes.h>
 
@@ -95,6 +96,25 @@ bool captureUntilFrame(dataCarrier *c, NDIlib_frame_type_e desired,
       c->errorMsg = timeoutMsg;
       return false;
     }
+  }
+}
+
+size_t videoDataSize(const NDIlib_video_frame_v2_t &frame) {
+  size_t stride = static_cast<size_t>(frame.line_stride_in_bytes);
+  size_t lines = static_cast<size_t>(frame.yres);
+  switch (frame.FourCC) {
+  case NDIlib_FourCC_type_UYVA:
+    return stride * lines * 2; // UYVY plane + alpha plane
+  case NDIlib_FourCC_type_P216:
+    return stride * lines * 2; // Y plane + UV plane
+  case NDIlib_FourCC_type_PA16:
+    return stride * lines * 3; // Y plane + UV plane + alpha plane
+  case NDIlib_FourCC_type_YV12:
+  case NDIlib_FourCC_type_I420:
+  case NDIlib_FourCC_type_NV12:
+    return stride * lines + (stride * lines) / 2; // 4:2:0 layouts
+  default:
+    return stride * lines; // Single-plane formats
   }
 }
 } // namespace
@@ -550,8 +570,8 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   }
 
   c->status = napi_create_buffer_copy(
-      env, c->videoFrame.line_stride_in_bytes * c->videoFrame.yres,
-      (void *)c->videoFrame.p_data, nullptr, &param);
+      env, videoDataSize(c->videoFrame), (void *)c->videoFrame.p_data, nullptr,
+      &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
