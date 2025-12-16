@@ -160,7 +160,9 @@ done:
 void receiveExecute(napi_env env, void *data) {
   receiveCarrier *c = (receiveCarrier *)data;
 
-  NDIlib_recv_create_v3_t receiveConfig;
+  NDIlib_recv_create_v3_t receiveConfig{};
+  receiveConfig.source_to_connect_to =
+      c->source != nullptr ? *c->source : NDIlib_source_t();
   receiveConfig.color_format = c->colorFormat;
   receiveConfig.bandwidth = c->bandwidth;
   receiveConfig.allow_video_fields = c->allowVideoFields;
@@ -238,10 +240,11 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "tally", tallyFn);
   REJECT_STATUS;
 
-  napi_value source, name, uri;
+  napi_value source, name;
   c->status = napi_create_string_utf8(env, c->source->p_ndi_name,
                                       NAPI_AUTO_LENGTH, &name);
   REJECT_STATUS;
+  napi_value uri;
   if (c->source->p_url_address != NULL) {
     c->status = napi_create_string_utf8(env, c->source->p_url_address,
                                         NAPI_AUTO_LENGTH, &uri);
@@ -251,8 +254,10 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
   c->status = napi_set_named_property(env, source, "name", name);
   REJECT_STATUS;
-  c->status = napi_set_named_property(env, source, "urlAddress", uri);
-  REJECT_STATUS;
+  if (c->source->p_url_address != NULL) {
+    c->status = napi_set_named_property(env, source, "urlAddress", uri);
+    REJECT_STATUS;
+  }
   c->status = napi_set_named_property(env, result, "source", source);
   REJECT_STATUS;
 
@@ -1144,7 +1149,15 @@ void dataReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
     tidyCarrier(env, c);
     break;
   case NDIlib_frame_type_none:
+    c->errorMsg =
+        "No NDI data received in the requested time interval for this request.";
+    c->status = GRANDI_NOT_FOUND;
+    REJECT_STATUS;
+    break;
   case NDIlib_frame_type_max:
+    c->errorMsg = "Unknown NDI frame type returned from receive call.";
+    c->status = GRANDI_ASYNC_FAILURE;
+    REJECT_STATUS;
     break;
   }
 }
