@@ -1,7 +1,16 @@
 import path from "node:path";
 import nodeGypBuild from "node-gyp-build";
 
-import type * as T from "./types";
+import type {
+	Finder,
+	FindOptions,
+	Grandi,
+	ReceiveOptions,
+	Receiver,
+	Routing,
+	Sender,
+	SendOptions,
+} from "./types";
 import {
 	AudioFormat,
 	Bandwidth,
@@ -22,7 +31,18 @@ function isSupportedPlatform(): boolean {
 	);
 }
 
-const noopAddon: T.GrandiAddon = {
+export interface GrandiAddon {
+	version(): string;
+	isSupportedCPU(): boolean;
+	initialize(): boolean;
+	destroy(): boolean;
+	find(params?: FindOptions): Promise<Finder>;
+	receive(params: ReceiveOptions): Promise<Receiver>;
+	send(params: SendOptions): Promise<Sender>;
+	routing(params: { name?: string; groups?: string }): Promise<Routing>;
+}
+
+const noopAddon: GrandiAddon = {
 	version() {
 		return "";
 	},
@@ -49,19 +69,30 @@ const noopAddon: T.GrandiAddon = {
 	},
 };
 
-const addon: T.GrandiAddon = isSupportedPlatform()
-	? (nodeGypBuild(path.join(__dirname, "..")) as T.GrandiAddon)
+const addon: GrandiAddon = isSupportedPlatform()
+	? (nodeGypBuild(path.join(__dirname, "..")) as GrandiAddon)
 	: noopAddon;
 
 /**
  * Creates a finder to discover NDI sources on the network.
- * @param {T.FindOptions} [params={}] - Options for finding sources.
+ * @param {FindOptions} [params={}] - Options for finding sources.
  * @param {boolean} [params.showLocalSources] - Whether to show local sources.
  * @param {string} [params.groups] - Multicast groups to search in.
  * @param {string} [params.extraIPs] - Additional IP addresses to search.
- * @returns {Promise<T.Finder>} A promise that resolves to a Finder instance for discovering sources.
+ * @returns {Promise<Finder>} A promise that resolves to a Finder instance for discovering sources.
+ * @throws {Error} Promise rejects on unsupported platform/CPU or if the finder cannot be created.
+ *
+ * @example
+ * ```js
+ * import { find, initialize } from "grandi";
+ * initialize();
+ * const finder = await find({ showLocalSources: true });
+ * finder.wait(1000);
+ * console.log(finder.sources());
+ * finder.destroy();
+ * ```
  */
-export function find(params: T.FindOptions = {}): Promise<T.Finder> {
+export function find(params: FindOptions = {}): Promise<Finder> {
 	return addon.find(params);
 }
 // Named runtime exports
@@ -78,33 +109,69 @@ export const isSupportedCPU = addon.isSupportedCPU;
 /**
  * Initializes the NDI library. Must be called before using any other NDI functions.
  * @returns {boolean} True if initialization was successful, false otherwise.
+ *
+ * @example
+ * ```js
+ * import { initialize } from "grandi";
+ * if (!initialize()) throw new Error("NDI init failed");
+ * ```
  */
 export const initialize = addon.initialize;
 /**
  * Destroys the NDI library instance and cleans up resources.
  * Should be called when done using NDI to free resources.
  * @returns {boolean} True if destruction was successful, false otherwise.
+ *
+ * @example
+ * ```js
+ * import { destroy } from "grandi";
+ * destroy();
+ * ```
  */
 export const destroy = addon.destroy;
 /**
  * Creates an NDI sender for transmitting video and audio over the network.
- * @param {T.SendOptions} params - Options for creating the sender.
+ * @param {SendOptions} params - Options for creating the sender.
  * @param {string} params.name - The name of the NDI source.
  * @param {string} [params.groups] - Multicast groups to send to.
  * @param {boolean} [params.clockVideo] - Whether to clock video frames.
  * @param {boolean} [params.clockAudio] - Whether to clock audio frames.
- * @returns {Promise<T.Sender>} A promise that resolves to a Sender instance for transmitting data.
+ * @returns {Promise<Sender>} A promise that resolves to a Sender instance for transmitting data.
+ * @throws {Error} Promise rejects on unsupported platform/CPU or if sender creation fails.
+ *
+ * @example
+ * ```js
+ * import { initialize, send } from "grandi";
+ * initialize();
+ * const sender = await send({ name: "My Source" });
+ * // sender.video(...) / sender.audio(...)
+ * sender.destroy();
+ * ```
  */
 export const send = addon.send;
 /**
  * Creates an NDI receiver for receiving video and audio from an NDI source.
- * @param {T.ReceiveOptions} params - Options for creating the receiver.
- * @param {T.Source} params.source - The NDI source to connect to.
- * @param {T.ColorFormat} [params.colorFormat] - The color format for received video.
- * @param {T.Bandwidth} [params.bandwidth] - The bandwidth limitation for the connection.
+ * @param {ReceiveOptions} params - Options for creating the receiver.
+ * @param {ReceiveOptions["source"]} params.source - The NDI source to connect to.
+ * @param {ReceiveOptions["colorFormat"]} [params.colorFormat] - The color format for received video.
+ * @param {ReceiveOptions["bandwidth"]} [params.bandwidth] - The bandwidth limitation for the connection.
  * @param {boolean} [params.allowVideoFields] - Whether to allow video fields.
  * @param {string} [params.name] - The name for the receiver.
- * @returns {Promise<T.Receiver>} A promise that resolves to a Receiver instance for receiving data.
+ * @returns {Promise<Receiver>} A promise that resolves to a Receiver instance for receiving data.
+ * @throws {Error} Promise rejects on unsupported platform/CPU or if receiver creation fails.
+ *
+ * @example
+ * ```js
+ * import { find, initialize, receive } from "grandi";
+ * initialize();
+ * const finder = await find({ showLocalSources: true });
+ * finder.wait(1000);
+ * const source = finder.sources()[0];
+ * finder.destroy();
+ * const receiver = await receive({ source });
+ * const frame = await receiver.video(1000);
+ * receiver.destroy();
+ * ```
  */
 export const receive = addon.receive;
 /**
@@ -112,7 +179,17 @@ export const receive = addon.receive;
  * @param {Object} params - Options for creating the router.
  * @param {string} [params.name] - The name for the router.
  * @param {string} [params.groups] - Multicast groups for the router.
- * @returns {Promise<T.Routing>} A promise that resolves to a Routing instance for source switching.
+ * @returns {Promise<Routing>} A promise that resolves to a Routing instance for source switching.
+ * @throws {Error} Promise rejects on unsupported platform/CPU or if routing creation fails.
+ *
+ * @example
+ * ```js
+ * import { initialize, routing } from "grandi";
+ * initialize();
+ * const router = await routing({ name: "My Router" });
+ * // router.change(source)
+ * router.destroy();
+ * ```
  */
 export const routing = addon.routing;
 
@@ -123,7 +200,7 @@ export type {
 	AudioReceiveOptions,
 	Finder,
 	FindOptions,
-	GrandiAddon,
+	Grandi,
 	PtpTimestamp,
 	ReceivedAudioFrame,
 	ReceivedMetadataFrame,
@@ -138,10 +215,11 @@ export type {
 	SourceChangeEvent,
 	StatusChangeEvent,
 	Timecode,
+	TimeoutEvent,
 	VideoFrame,
 } from "./types";
 
-const grandi = {
+const grandi: Grandi = {
 	version,
 	isSupportedCPU,
 	initialize,
