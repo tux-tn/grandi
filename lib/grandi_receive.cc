@@ -127,9 +127,9 @@ size_t videoDataSize(const NDIlib_video_frame_v2_t &frame) {
 
   switch (frame.FourCC) {
   case NDIlib_FourCC_type_UYVA:
-    // UYVY plane uses line_stride_in_bytes; alpha plane is 8-bit per pixel.
-    // NDI docs define alpha starts at (p_data + stride*yres).
-    return stride * lines + pixelsPerLine * lines;
+    // UYVY plane uses line_stride_in_bytes; alpha plane follows immediately
+    // and uses stride/2 bytes per line (see NDI docs custom allocator example).
+    return stride * lines + (stride / 2) * lines;
   case NDIlib_FourCC_type_P216:
     return stride * lines * 2; // Y plane + UV plane
   case NDIlib_FourCC_type_PA16:
@@ -456,6 +456,12 @@ napi_value receive(napi_env env, napi_callback_info info) {
     c->status =
         napi_get_value_bool(env, allowVideoFields, &c->allowVideoFields);
     REJECT_RETURN;
+  }
+
+  // NDI docs: allow_video_fields is implicitly true when using fastest/best.
+  if (c->colorFormat == NDIlib_recv_color_format_fastest ||
+      c->colorFormat == NDIlib_recv_color_format_best) {
+    c->allowVideoFields = true;
   }
 
   c->status = napi_get_named_property(env, config, "name", &name);
