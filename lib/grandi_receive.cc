@@ -1169,10 +1169,19 @@ void dataReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
     tidyCarrier(env, c);
     break;
   case NDIlib_frame_type_none:
-    c->errorMsg =
-        "No NDI data received in the requested time interval for this request.";
-    c->status = GRANDI_NOT_FOUND;
+    napi_value timeoutResult, timeoutType;
+    c->status = napi_create_object(env, &timeoutResult);
     REJECT_STATUS;
+    c->status =
+        napi_create_string_utf8(env, "timeout", NAPI_AUTO_LENGTH, &timeoutType);
+    REJECT_STATUS;
+    c->status =
+        napi_set_named_property(env, timeoutResult, "type", timeoutType);
+    REJECT_STATUS;
+    status = napi_resolve_deferred(env, c->_deferred, timeoutResult);
+    FLOATING_STATUS;
+
+    tidyCarrier(env, c);
     break;
   case NDIlib_frame_type_max:
     c->errorMsg = "Unknown NDI frame type returned from receive call.";

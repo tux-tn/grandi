@@ -117,12 +117,17 @@ export interface StatusChangeEvent {
 	type: "statusChange";
 }
 
+export interface TimeoutEvent {
+	type: "timeout";
+}
+
 export type ReceiverDataFrame =
 	| ReceivedVideoFrame
 	| ReceivedAudioFrame
 	| ReceivedMetadataFrame
 	| SourceChangeEvent
-	| StatusChangeEvent;
+	| StatusChangeEvent
+	| TimeoutEvent;
 
 export interface AudioReceiveOptions {
 	audioFormat?: AudioFormat;
