@@ -104,6 +104,34 @@ function assertTallyShape(tally: SenderTally) {
 	expect(typeof tally.on_preview).toBe("boolean");
 }
 
+async function waitForVideoFrameSize(
+	receiver: Receiver,
+	expected: { xres: number; yres: number },
+	timeoutMs = 5_000,
+): Promise<ReceivedVideoFrame> {
+	const deadline = Date.now() + timeoutMs;
+	let lastVideoFrame: ReceivedVideoFrame | undefined;
+
+	while (Date.now() < deadline) {
+		const remaining = deadline - Date.now();
+		const frame = await receiver.data(Math.min(500, remaining));
+
+		if (frame.type !== "video") continue;
+		lastVideoFrame = frame;
+
+		// Routing and newly-connected receivers can emit placeholder frames (e.g. 16x16)
+		// during connection negotiation; keep polling until the expected format arrives.
+		if (frame.xres === expected.xres && frame.yres === expected.yres) return frame;
+	}
+
+	throw new Error(
+		`Timed out waiting for ${expected.xres}x${expected.yres} video frame` +
+			(lastVideoFrame
+				? `; last was ${lastVideoFrame.xres}x${lastVideoFrame.yres}`
+				: ""),
+	);
+}
+
 describeIntegration("grandi native addon (integration)", () => {
 	beforeAll(() => {
 		grandi.initialize();
@@ -147,10 +175,12 @@ describeIntegration("grandi native addon (integration)", () => {
 					name: `${senderName}-receiver`,
 					colorFormat: grandi.ColorFormat.BGRX_BGRA,
 				});
-				const frame = await receiver.video(5000);
+				const frame = await waitForVideoFrameSize(
+					receiver,
+					{ xres: 64, yres: 36 },
+					5000,
+				);
 				assertReceivedVideoFrame(frame);
-				expect(frame.xres).toBe(64);
-				expect(frame.yres).toBe(36);
 				const connections = await sender.connections();
 				expect(connections).toBeGreaterThanOrEqual(1);
 
@@ -225,10 +255,12 @@ describeIntegration("grandi native addon (integration)", () => {
 					colorFormat: grandi.ColorFormat.BGRX_BGRA,
 				});
 
-				const routedFrame = await routedReceiver.video(5000);
+				const routedFrame = await waitForVideoFrameSize(
+					routedReceiver,
+					{ xres: 64, yres: 36 },
+					5000,
+				);
 				assertReceivedVideoFrame(routedFrame);
-				expect(routedFrame.xres).toBe(64);
-				expect(routedFrame.yres).toBe(36);
 				expect(routing.connections()).toBeGreaterThanOrEqual(1);
 
 				expect(routing.clear()).toBe(true);
