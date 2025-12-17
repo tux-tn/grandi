@@ -13,6 +13,8 @@
   limitations under the License.
 */
 
+#include <cstddef>
+#include <cstdlib>
 #include <string>
 #include <Processing.NDI.Lib.h>
 
@@ -128,6 +130,167 @@ bool parseTimeProperty(napi_env env, napi_value object, const char *propName,
   }
 
   return getInt64FromValue(env, property, target, c, propName);
+}
+
+bool validateVideoFrameBuffer(const NDIlib_video_frame_v2_t &frame,
+                              size_t bufferLen, carrier *c) {
+  if (frame.xres <= 0 || frame.yres <= 0) {
+    c->errorMsg = "xres and yres must be positive.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+  if (frame.frame_rate_N <= 0 || frame.frame_rate_D <= 0) {
+    c->errorMsg = "frameRateN and frameRateD must be positive.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+  if (frame.line_stride_in_bytes < 0) {
+    c->errorMsg = "lineStrideBytes must be >= 0.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  const size_t strideProvided = static_cast<size_t>(frame.line_stride_in_bytes);
+  const size_t lines = static_cast<size_t>(frame.yres);
+  const size_t pixels = static_cast<size_t>(frame.xres);
+
+  auto requireEvenX = [&]() {
+    if ((frame.xres % 2) != 0) {
+      c->errorMsg =
+          "xres must be divisible by 2 for YUV 4:2:2 and 4:2:0 formats.";
+      c->status = GRANDI_INVALID_ARGS;
+      return false;
+    }
+    return true;
+  };
+  auto requireEvenXY = [&]() {
+    if (!requireEvenX())
+      return false;
+    if ((frame.yres % 2) != 0) {
+      c->errorMsg = "yres must be divisible by 2 for YUV 4:2:0 formats.";
+      c->status = GRANDI_INVALID_ARGS;
+      return false;
+    }
+    return true;
+  };
+
+  size_t minStride = 0;
+  size_t requiredBytes = 0;
+  size_t stride = strideProvided;
+  switch (frame.FourCC) {
+  case NDIlib_FourCC_type_UYVY:
+    if (!requireEvenX())
+      return false;
+    minStride = pixels * 2;
+    stride = stride ? stride : minStride;
+    requiredBytes = stride * lines;
+    break;
+  case NDIlib_FourCC_type_UYVA:
+    if (!requireEvenX())
+      return false;
+    minStride = pixels * 2;
+    stride = stride ? stride : minStride;
+    if ((stride % 2) != 0) {
+      c->errorMsg = "lineStrideBytes must be even for UYVA frames.";
+      c->status = GRANDI_INVALID_ARGS;
+      return false;
+    }
+    requiredBytes = stride * lines + (stride / 2) * lines;
+    break;
+  case NDIlib_FourCC_type_P216:
+    if (!requireEvenX())
+      return false;
+    minStride = pixels * sizeof(uint16_t);
+    stride = stride ? stride : minStride;
+    requiredBytes = stride * lines * 2;
+    break;
+  case NDIlib_FourCC_type_PA16:
+    if (!requireEvenX())
+      return false;
+    minStride = pixels * sizeof(uint16_t);
+    stride = stride ? stride : minStride;
+    requiredBytes = stride * lines * 3;
+    break;
+  case NDIlib_FourCC_type_YV12:
+  case NDIlib_FourCC_type_I420:
+  case NDIlib_FourCC_type_NV12:
+    if (!requireEvenXY())
+      return false;
+    minStride = pixels * sizeof(uint8_t);
+    stride = stride ? stride : minStride;
+    requiredBytes = stride * lines + (stride * lines) / 2;
+    break;
+  case NDIlib_FourCC_type_BGRA:
+  case NDIlib_FourCC_type_BGRX:
+  case NDIlib_FourCC_type_RGBA:
+  case NDIlib_FourCC_type_RGBX:
+    minStride = pixels * 4;
+    stride = stride ? stride : minStride;
+    requiredBytes = stride * lines;
+    break;
+  default:
+    c->errorMsg = "Unsupported FourCC value.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  if (stride < minStride) {
+    c->errorMsg = "lineStrideBytes is too small for the given fourCC/xres.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+  if (bufferLen < requiredBytes) {
+    c->errorMsg =
+        "Video frame data buffer is smaller than required for the given frame "
+        "layout.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+  return true;
+}
+
+bool validateAudioFrameBuffer(const NDIlib_audio_frame_v3_t &frame,
+                              size_t bufferLen, carrier *c) {
+  if (frame.sample_rate <= 0 || frame.no_channels <= 0 || frame.no_samples <= 0) {
+    c->errorMsg = "sampleRate, noChannels, and noSamples must be positive.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+  if (frame.channel_stride_in_bytes <= 0) {
+    c->errorMsg = "channelStrideBytes must be a positive integer.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  // This project currently exposes only FLTp (planar float32) in the public
+  // FourCC enum.
+  if (frame.FourCC != NDIlib_FourCC_audio_type_FLTP) {
+    c->errorMsg = "Unsupported audio FourCC value.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  const size_t minStride =
+      static_cast<size_t>(frame.no_samples) * sizeof(float);
+  if (static_cast<size_t>(frame.channel_stride_in_bytes) < minStride) {
+    c->errorMsg =
+        "channelStrideBytes is too small for float32 planar audio samples.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  const size_t requiredBytes =
+      static_cast<size_t>(frame.channel_stride_in_bytes) *
+      static_cast<size_t>(frame.no_channels);
+  if (bufferLen < requiredBytes) {
+    c->errorMsg =
+        "Audio frame data buffer is smaller than required for the given audio "
+        "layout.";
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+
+  return true;
 }
 } // namespace
 
@@ -487,7 +650,7 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
     c->status = napi_typeof(env, param, &type);
     REJECT_RETURN;
     if (type != napi_number)
-      REJECT_ERROR_RETURN("yres value must be a number", GRANDI_INVALID_ARGS);
+      REJECT_ERROR_RETURN("xres value must be a number", GRANDI_INVALID_ARGS);
     c->status = napi_get_value_int32(env, param, &c->videoFrame.xres);
     REJECT_RETURN;
 
@@ -575,8 +738,9 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
     int32_t formatType;
     c->status = napi_get_value_int32(env, param, &formatType);
     REJECT_RETURN;
-    // TODO: checks
     c->videoFrame.frame_format_type = (NDIlib_frame_format_type_e)formatType;
+    if (!validFrameFormat(c->videoFrame.frame_format_type))
+      REJECT_ERROR_RETURN("Invalid frameFormatType value.", GRANDI_INVALID_ARGS);
 
     c->status = napi_get_named_property(env, config, "lineStrideBytes", &param);
     REJECT_RETURN;
@@ -588,6 +752,18 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
     c->status =
         napi_get_value_int32(env, param, &c->videoFrame.line_stride_in_bytes);
     REJECT_RETURN;
+
+    c->status = napi_get_named_property(env, config, "fourCC", &param);
+    REJECT_RETURN;
+    c->status = napi_typeof(env, param, &type);
+    REJECT_RETURN;
+    if (type != napi_number)
+      REJECT_ERROR_RETURN("fourCC value must be a number", GRANDI_INVALID_ARGS);
+    int32_t fourCC;
+    c->status = napi_get_value_int32(env, param, &fourCC);
+    REJECT_RETURN;
+    // TODO: checks
+    c->videoFrame.FourCC = (NDIlib_FourCC_video_type_e)fourCC; // TODO
 
     napi_value videoBuffer;
     c->status = napi_get_named_property(env, config, "data", &videoBuffer);
@@ -602,23 +778,14 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
     c->status = napi_get_buffer_info(env, videoBuffer, &data, &length);
     REJECT_RETURN;
     c->videoFrame.p_data = (uint8_t *)data;
+
+    if (!validateVideoFrameBuffer(c->videoFrame, length, c))
+      REJECT_RETURN;
+
     napi_ref bufferRef;
     c->status = napi_create_reference(env, videoBuffer, 1, &bufferRef);
     REJECT_RETURN;
     c->passthru = bufferRef;
-    // TODO: check length
-
-    c->status = napi_get_named_property(env, config, "fourCC", &param);
-    REJECT_RETURN;
-    c->status = napi_typeof(env, param, &type);
-    REJECT_RETURN;
-    if (type != napi_number)
-      REJECT_ERROR_RETURN("fourCC value must be a number", GRANDI_INVALID_ARGS);
-    int32_t fourCC;
-    c->status = napi_get_value_int32(env, param, &fourCC);
-    REJECT_RETURN;
-    // TODO: checks
-    c->videoFrame.FourCC = (NDIlib_FourCC_video_type_e)fourCC; // TODO
   } else
     REJECT_ERROR_RETURN("frame not provided", GRANDI_INVALID_ARGS);
 
@@ -778,6 +945,17 @@ napi_value audioSend(napi_env env, napi_callback_info info) {
                                      &c->audioFrame.channel_stride_in_bytes);
     REJECT_RETURN;
 
+    c->status = napi_get_named_property(env, config, "fourCC", &param);
+    REJECT_RETURN;
+    c->status = napi_typeof(env, param, &type);
+    REJECT_RETURN;
+    if (type != napi_number)
+      REJECT_ERROR_RETURN("fourCC value must be a number", GRANDI_INVALID_ARGS);
+    int32_t fourCC;
+    c->status = napi_get_value_int32(env, param, &fourCC);
+    REJECT_RETURN;
+    c->audioFrame.FourCC = (NDIlib_FourCC_audio_type_e)fourCC;
+
     napi_value audioBuffer;
     c->status = napi_get_named_property(env, config, "data", &audioBuffer);
     REJECT_RETURN;
@@ -791,21 +969,14 @@ napi_value audioSend(napi_env env, napi_callback_info info) {
     c->status = napi_get_buffer_info(env, audioBuffer, &data, &length);
     REJECT_RETURN;
     c->audioFrame.p_data = (uint8_t *)data;
+
+    if (!validateAudioFrameBuffer(c->audioFrame, length, c))
+      REJECT_RETURN;
+
     napi_ref bufferRef;
     c->status = napi_create_reference(env, audioBuffer, 1, &bufferRef);
     REJECT_RETURN;
     c->passthru = bufferRef;
-
-    c->status = napi_get_named_property(env, config, "fourCC", &param);
-    REJECT_RETURN;
-    c->status = napi_typeof(env, param, &type);
-    REJECT_RETURN;
-    if (type != napi_number)
-      REJECT_ERROR_RETURN("fourCC value must be a number", GRANDI_INVALID_ARGS);
-    int32_t fourCC;
-    c->status = napi_get_value_int32(env, param, &fourCC);
-    REJECT_RETURN;
-    c->audioFrame.FourCC = (NDIlib_FourCC_audio_type_e)fourCC;
   } else
     REJECT_ERROR_RETURN("frame not provided", GRANDI_INVALID_ARGS);
 
