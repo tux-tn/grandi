@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <Processing.NDI.Lib.h>
 #include <inttypes.h>
 
@@ -100,11 +101,35 @@ bool captureUntilFrame(dataCarrier *c, NDIlib_frame_type_e desired,
 }
 
 size_t videoDataSize(const NDIlib_video_frame_v2_t &frame) {
-  size_t stride = static_cast<size_t>(frame.line_stride_in_bytes);
+  size_t stride = static_cast<size_t>(std::abs(frame.line_stride_in_bytes));
   size_t lines = static_cast<size_t>(frame.yres);
+  size_t pixelsPerLine = static_cast<size_t>(frame.xres);
+  if (stride == 0) {
+    switch (frame.FourCC) {
+    case NDIlib_FourCC_type_UYVY:
+    case NDIlib_FourCC_type_UYVA:
+      stride = pixelsPerLine * 2;
+      break;
+    case NDIlib_FourCC_type_BGRA:
+    case NDIlib_FourCC_type_BGRX:
+    case NDIlib_FourCC_type_RGBA:
+    case NDIlib_FourCC_type_RGBX:
+      stride = pixelsPerLine * 4;
+      break;
+    case NDIlib_FourCC_type_P216:
+    case NDIlib_FourCC_type_PA16:
+      stride = pixelsPerLine * sizeof(uint16_t);
+      break;
+    default:
+      break;
+    }
+  }
+
   switch (frame.FourCC) {
   case NDIlib_FourCC_type_UYVA:
-    return stride * lines * 2; // UYVY plane + alpha plane
+    // UYVY plane uses line_stride_in_bytes; alpha plane is 8-bit per pixel.
+    // NDI docs define alpha starts at (p_data + stride*yres).
+    return stride * lines + pixelsPerLine * lines;
   case NDIlib_FourCC_type_P216:
     return stride * lines * 2; // Y plane + UV plane
   case NDIlib_FourCC_type_PA16:
@@ -392,8 +417,14 @@ napi_value receive(napi_env env, napi_callback_info info) {
     REJECT_RETURN;
 
     c->colorFormat = (NDIlib_recv_color_format_e)enumValue;
-    if (!validColorFormat(c->colorFormat))
+    if (!validColorFormat(c->colorFormat)) {
+#ifndef _WIN32
+      if (enumValue == 1000)
+        REJECT_ERROR_RETURN("BGRX_BGRA_FLIPPED is only supported on Windows.",
+                            GRANDI_INVALID_ARGS);
+#endif
       REJECT_ERROR_RETURN("Invalid colour format value.", GRANDI_INVALID_ARGS);
+    }
   }
 
   c->status = napi_get_named_property(env, config, "bandwidth", &bandwidth);
@@ -569,9 +600,16 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
     REJECT_STATUS;
   }
 
-  c->status = napi_create_buffer_copy(
-      env, videoDataSize(c->videoFrame), (void *)c->videoFrame.p_data, nullptr,
-      &param);
+  size_t videoBytes = videoDataSize(c->videoFrame);
+  if (c->videoFrame.p_data == nullptr || videoBytes == 0) {
+    c->errorMsg = "Received empty NDI video frame buffer.";
+    c->status = GRANDI_NOT_VIDEO;
+    REJECT_STATUS;
+  }
+
+  c->status = napi_create_buffer_copy(env, videoBytes,
+                                      (void *)c->videoFrame.p_data, nullptr,
+                                      &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
