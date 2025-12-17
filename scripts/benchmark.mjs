@@ -200,7 +200,9 @@ async function main() {
 		});
 
 		// Allocate buffers once (avoid per-frame allocations).
-		const videoBuffer = Buffer.allocUnsafe(args.width * args.height * 4);
+		const videoStrideBytes = args.width * 2;
+		const videoPayloadBytes = videoStrideBytes * args.height;
+		const videoBuffer = Buffer.allocUnsafe(videoPayloadBytes);
 		videoBuffer.fill(0xaa);
 		const samplesPerFrame = Math.floor(48_000 / args.fps);
 		const audioBuffer = Buffer.allocUnsafe(samplesPerFrame * 2 * 4);
@@ -215,9 +217,9 @@ async function main() {
 			frameRateN: args.fps,
 			frameRateD: 1,
 			pictureAspectRatio: args.width / args.height,
-			fourCC: grandi.FOURCC_BGRA,
+			fourCC: grandi.FOURCC_UYVY,
 			frameFormatType: grandi.FrameType.Progressive,
-			lineStrideBytes: args.width * 4,
+			lineStrideBytes: videoStrideBytes,
 			data: videoBuffer,
 			timestamp,
 		};
@@ -280,7 +282,7 @@ async function main() {
 				await sender.video(videoFrame);
 				sendVideoNs += hrtimeNs() - sendStart;
 				sendVideoCount += 1;
-				sendVideoBytes += videoBuffer.length;
+				sendVideoBytes += videoPayloadBytes;
 
 				if (args.audio) {
 					const audioStart = hrtimeNs();
