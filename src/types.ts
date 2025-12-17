@@ -64,6 +64,10 @@ export interface VideoFrame {
 	lineStrideBytes: number;
 	data: Buffer;
 	timecode?: Timecode;
+	/**
+	 * Receive-only timestamp filled by the NDI SDK (UTC time, 100ns units under the hood).
+	 * NDI ignores this field when sending.
+	 */
 	timestamp?: PtpTimestamp;
 	metadata?: string;
 }
@@ -84,6 +88,10 @@ export interface AudioFrame {
 	data: Buffer;
 	fourCC: FourCC;
 	timecode?: Timecode;
+	/**
+	 * Receive-only timestamp filled by the NDI SDK (UTC time, 100ns units under the hood).
+	 * NDI ignores this field when sending.
+	 */
 	timestamp?: PtpTimestamp;
 	metadata?: string;
 }
@@ -211,6 +219,10 @@ export interface ReceiveOptions {
 	source: Source;
 	colorFormat?: ColorFormat;
 	bandwidth?: Bandwidth;
+	/**
+	 * If `colorFormat` is `ColorFormat.Fastest` or `ColorFormat.Best`, the NDI SDK
+	 * implicitly enables video fields and this option is forced to `true`.
+	 */
 	allowVideoFields?: boolean;
 	name?: string;
 }
