@@ -225,6 +225,27 @@ if (payload.type === "video") {
 }
 ```
 
+### Frame synchronization (pull-based playback)
+If you want smoother playback clocked to your own loop (e.g., GPU vsync) instead of reacting to pushed frames, wrap an existing receiver in an NDI frame-synchronizer:
+
+```ts
+const receiver = await grandi.receive({ source, colorFormat: grandi.ColorFormat.Fastest });
+const fs = await grandi.framesync(receiver);
+
+// Pull video; returns { type: "timeout" } until first frame arrives.
+const video = await fs.video(grandi.FrameType.Progressive);
+
+// Pull audio resampled to your requested cadence.
+const audio = await fs.audio({ sampleRate: 48_000, noChannels: 2, noSamples: 1600 });
+
+fs.destroy();       // destroy frame-sync first
+receiver.destroy(); // then destroy the receiver
+```
+
+Notes:
+- `fs.video()` and `fs.audio()` always return immediately; they may duplicate/drop frames to match your call rate.
+- Always destroy the frame-sync before destroying the receiver it wraps.
+
 ### Sending streams
 Sending is fully supported. Call `grandi.send` with a `SendOptions` object to create a `Sender` instance capable of video, audio, metadata, and tally interactions:
 
