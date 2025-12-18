@@ -21,6 +21,7 @@ function parseArgs(argv) {
 		mode: "realtime", // realtime | throughput
 		audio: true,
 		color: true,
+		framesync: false,
 		gcEveryMs: 500,
 	};
 
@@ -62,6 +63,10 @@ function parseArgs(argv) {
 		}
 		if (token === "--no-color") {
 			args.color = false;
+			continue;
+		}
+		if (token === "--framesync") {
+			args.framesync = true;
 			continue;
 		}
 		if (token === "--gc-every") {
@@ -149,6 +154,7 @@ function printHelp() {
 
 Usage:
   node scripts/benchmark.mjs [--duration 5] [--fps 30] [--width 1920] [--height 1080] [--mode realtime|throughput] [--no-audio] [--no-color]
+  node scripts/benchmark.mjs ... [--framesync]
   node scripts/benchmark.mjs ... [--gc-every 500]
 
 Modes:
@@ -159,6 +165,7 @@ Notes:
   - Requires a working local NDI environment.
   - Creates a sender + receiver on the same machine.
   - Measures send/receive rates and best-effort video latency using frame timestamps.
+  - --framesync uses NDI frame-sync for capture (smoother pull-based receiving).
   - For stable long runs at 1080p, run with --expose-gc (pnpm bench does this) so buffers can be reclaimed.
 `);
 }
@@ -191,6 +198,7 @@ async function main() {
 	});
 
 	let receiver;
+	let fs;
 	try {
 		const source = await waitForSourceByName(grandi, senderName);
 		receiver = await grandi.receive({
@@ -198,6 +206,9 @@ async function main() {
 			name: `${senderName}-receiver`,
 			colorFormat: grandi.ColorFormat.Fastest,
 		});
+		if (args.framesync) {
+			fs = await grandi.framesync(receiver);
+		}
 
 		// Allocate buffers once (avoid per-frame allocations).
 		const videoStrideBytes = args.width * 2;
@@ -297,9 +308,26 @@ async function main() {
 		})();
 
 		const receiverTask = (async () => {
+			const startedRecvAtMs = Date.now();
+			let nextPullAtMs = startedRecvAtMs;
 			while (controller.running && Date.now() < deadlineAtMs) {
 				maybeCollectGarbage(gcState);
-				const frame = await receiver.data(500);
+				if (args.framesync) {
+					const now = Date.now();
+					const waitMs = nextPullAtMs - now;
+					if (waitMs > 0) await sleep(waitMs);
+					nextPullAtMs += frameIntervalMs;
+					const afterSleep = Date.now();
+					if (nextPullAtMs < afterSleep - frameIntervalMs) {
+						nextPullAtMs = afterSleep;
+					}
+				}
+
+				const frame = args.framesync
+					? await fs.video()
+					: await receiver.data(500);
+				if (frame.type === "timeout") continue;
+
 				if (frame.type === "video") {
 					if (
 						frame.xres !== expectedSize.xres ||
@@ -316,9 +344,19 @@ async function main() {
 					if (videoLatenciesMs.length < maxLatencySamples) {
 						videoLatenciesMs.push(latency);
 					}
-				} else if (args.audio && frame.type === "audio") {
+				} else if (!args.framesync && args.audio && frame.type === "audio") {
 					recvAudioCount += 1;
 					recvAudioBytes += frame.data.length;
+				}
+
+				if (args.framesync && args.audio) {
+					const audio = await fs.audio({
+						sampleRate: 48_000,
+						noChannels: 2,
+						noSamples: samplesPerFrame,
+					});
+					recvAudioCount += 1;
+					recvAudioBytes += audio.data.length;
 				}
 			}
 		})();
@@ -394,6 +432,9 @@ async function main() {
 			);
 		}
 	} finally {
+		try {
+			fs?.destroy();
+		} catch {}
 		try {
 			receiver?.destroy();
 		} catch {}
