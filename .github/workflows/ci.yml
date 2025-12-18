@@ -27,33 +27,37 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y avahi-daemon libavahi-common3 libavahi-client3
-
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20.19.5"
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Type check TypeScript sources
-        run: npm exec -- tsc --noEmit -p tsconfig.json
+        run: pnpm exec -- tsc --noEmit -p tsconfig.json
 
       - name: Check Biome formatting
-        run: npm run format
+        run: pnpm run format
 
       - name: Lint with Biome
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Build package typescript sources
-        run: npm run build
+        run: pnpm run build
 
       - name: Prebuild Binaries
-        run: npm run prebuild
+        run: pnpm run prebuild
       
       - name: Run unit tests
-        run: npm run test:unit
+        run: pnpm run test:unit
 
       - name: Run integration tests
-        run: RUN_NDI_TESTS=1 npm run test:integration
+        run: pnpm run test:integration
 
