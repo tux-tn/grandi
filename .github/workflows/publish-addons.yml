@@ -72,7 +72,7 @@ jobs:
         if: ${{ matrix.dockerImage != '' }}
         run: |
           docker run --rm -u $(id -u):$(id -g) -v $PWD:/input -w /input ${{ matrix.dockerImage }} /bin/bash -lc "\
-            npm install && \
+            npm install --ignore-scripts && \
             node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} \
           "
 
