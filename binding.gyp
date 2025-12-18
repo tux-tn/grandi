@@ -12,6 +12,7 @@
         "lib/grandi_find.cc",
         "lib/grandi_send.cc",
         "lib/grandi_receive.cc",
+        "lib/grandi_framesync.cc",
         "lib/grandi_routing.cc",
         "lib/grandi.cc"
       ],
