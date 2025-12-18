@@ -32,14 +32,6 @@
 	"bugs": {
 		"url": "https://github.com/tux-tn/grandi/issues"
 	},
-	"optionalDependencies": {
-		"@grandi/linux-x64": "1.0.0",
-		"@grandi/linux-arm64": "1.0.0",
-		"@grandi/linux-armv7l": "1.0.0",
-		"@grandi/win32-x64": "1.0.0",
-		"@grandi/win32-ia32": "1.0.0",
-		"@grandi/darwin-universal": "1.0.0"
-	},
 	"dependencies": {
 		"cross-spawn": "7.0.6",
 		"cross-zip": "4.0.1",
