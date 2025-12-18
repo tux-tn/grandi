@@ -570,9 +570,8 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
     REJECT_STATUS;
   }
 
-  c->status = napi_create_buffer_copy(env, videoBytes,
-                                      (void *)c->videoFrame.p_data, nullptr,
-                                      &param);
+  c->status = napi_create_buffer_copy(
+      env, videoBytes, (void *)c->videoFrame.p_data, nullptr, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;

@@ -251,7 +251,8 @@ bool validateVideoFrameBuffer(const NDIlib_video_frame_v2_t &frame,
 
 bool validateAudioFrameBuffer(const NDIlib_audio_frame_v3_t &frame,
                               size_t bufferLen, carrier *c) {
-  if (frame.sample_rate <= 0 || frame.no_channels <= 0 || frame.no_samples <= 0) {
+  if (frame.sample_rate <= 0 || frame.no_channels <= 0 ||
+      frame.no_samples <= 0) {
     c->errorMsg = "sampleRate, noChannels, and noSamples must be positive.";
     c->status = GRANDI_INVALID_ARGS;
     return false;
@@ -740,7 +741,8 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
     REJECT_RETURN;
     c->videoFrame.frame_format_type = (NDIlib_frame_format_type_e)formatType;
     if (!validFrameFormat(c->videoFrame.frame_format_type))
-      REJECT_ERROR_RETURN("Invalid frameFormatType value.", GRANDI_INVALID_ARGS);
+      REJECT_ERROR_RETURN("Invalid frameFormatType value.",
+                          GRANDI_INVALID_ARGS);
 
     c->status = napi_get_named_property(env, config, "lineStrideBytes", &param);
     REJECT_RETURN;
