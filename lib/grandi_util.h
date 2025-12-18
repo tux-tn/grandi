@@ -130,6 +130,8 @@ bool validBandwidth(NDIlib_recv_bandwidth_e bandwidth);
 bool validFrameFormat(NDIlib_frame_format_type_e format);
 bool validAudioFormat(Grandi_audio_format_e format);
 
+size_t videoDataSize(const NDIlib_video_frame_v2_t &frame);
+
 napi_status makeNativeSource(napi_env env, napi_value source,
                              NDIlib_source_t *result);
 void freeNativeSource(NDIlib_source_t *source);
