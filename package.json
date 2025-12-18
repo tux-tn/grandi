@@ -72,7 +72,7 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:unit": "vitest run test/unit",
-		"test:integration": "cross-env RUN_NDI_TESTS=1 vitest run test/integration",
+		"test:integration": "vitest run test/integration",
 		"bench": "node --expose-gc scripts/benchmark.mjs",
 		"test:coverage": "vitest run --coverage",
 		"format": "biome format",

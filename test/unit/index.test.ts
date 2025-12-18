@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { GrandiAddon } from "../../src/types";
+import type { GrandiAddon } from "../../src/index";
 
 function mockProcessProperty<K extends "platform" | "arch">(
 	key: K,
@@ -23,6 +23,13 @@ function createAddonMock(): GrandiAddon {
 		initialize: vi.fn(() => true),
 		destroy: vi.fn(() => true),
 		find: vi.fn().mockResolvedValue({}),
+		framesync: vi.fn().mockResolvedValue({
+			video: vi.fn(),
+			audio: vi.fn(),
+			audioQueueDepth: vi.fn(),
+			destroy: vi.fn(),
+			embedded: {},
+		}),
 		send: vi.fn().mockResolvedValue({
 			video: vi.fn(),
 			audio: vi.fn(),
@@ -102,6 +109,10 @@ describe("src/index entrypoint", () => {
 
 		expect(grandi.version()).toBe("1.2.3");
 		expect(grandi.isSupportedCPU()).toBe(true);
+
+		const receiver = { embedded: {} };
+		await grandi.framesync(receiver as never);
+		expect(addon.framesync).toHaveBeenLastCalledWith(receiver);
 	});
 
 	it("falls back to the noop addon when the platform is unsupported", async () => {
@@ -120,6 +131,9 @@ describe("src/index entrypoint", () => {
 			"Unsupported platform or CPU",
 		);
 		await expect(grandi.receive({} as never)).rejects.toThrow(
+			"Unsupported platform or CPU",
+		);
+		await expect(grandi.framesync({} as never)).rejects.toThrow(
 			"Unsupported platform or CPU",
 		);
 	});
@@ -164,6 +178,9 @@ describe("src/index entrypoint", () => {
 			"Unsupported platform or CPU",
 		);
 		await expect(grandiModule.receive({} as never)).rejects.toThrow(
+			"Unsupported platform or CPU",
+		);
+		await expect(grandiModule.framesync({} as never)).rejects.toThrow(
 			"Unsupported platform or CPU",
 		);
 		await expect(grandiModule.routing({} as never)).rejects.toThrow(

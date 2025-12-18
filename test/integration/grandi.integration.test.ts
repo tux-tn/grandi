@@ -13,9 +13,6 @@ import type {
 	Source,
 } from "../../src/types";
 
-const shouldRunIntegration =
-	process.env.RUN_NDI_TESTS === "1" || process.env.RUN_NDI_TESTS === "true";
-const isCI = process.env.CI === "true" || process.env.CI === "1";
 const addonCanLoad = (() => {
 	try {
 		nodeGypBuild(path.join(__dirname, "..", ".."));
@@ -25,8 +22,7 @@ const addonCanLoad = (() => {
 	}
 })();
 
-const describeIntegration =
-	shouldRunIntegration && addonCanLoad ? describe : describe.skip;
+const describeIntegration = addonCanLoad ? describe : describe.skip;
 
 async function waitForSourceByName(
 	name: string,
@@ -121,14 +117,15 @@ async function waitForVideoFrameSize(
 
 		// Routing and newly-connected receivers can emit placeholder frames (e.g. 16x16)
 		// during connection negotiation; keep polling until the expected format arrives.
-		if (frame.xres === expected.xres && frame.yres === expected.yres) return frame;
+		if (frame.xres === expected.xres && frame.yres === expected.yres)
+			return frame;
 	}
 
 	throw new Error(
 		`Timed out waiting for ${expected.xres}x${expected.yres} video frame` +
-			(lastVideoFrame
-				? `; last was ${lastVideoFrame.xres}x${lastVideoFrame.yres}`
-				: ""),
+		(lastVideoFrame
+			? `; last was ${lastVideoFrame.xres}x${lastVideoFrame.yres}`
+			: ""),
 	);
 }
 
@@ -155,123 +152,171 @@ describeIntegration("grandi native addon (integration)", () => {
 		expect(finder.destroy()).toBe(true);
 	});
 	// skip on CI systems where loopback NDI may not be available
-	(isCI ? test.skip : test)(
-		"can send frames that are received locally",
-		async () => {
-			const senderName = `grandi-vitest-${Date.now()}`;
-			const sender = await grandi.send({
-				name: senderName,
-				clockVideo: true,
-				clockAudio: true,
+	test("can send frames that are received locally", async () => {
+		const senderName = `grandi-vitest-${Date.now()}`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: true,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+		let receiver: Receiver | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			receiver = await grandi.receive({
+				source,
+				name: `${senderName}-receiver`,
+				colorFormat: grandi.ColorFormat.BGRX_BGRA,
 			});
-			const controller = { running: true };
-			const pumpTask = pumpFrames(sender, controller);
-			let receiver: Receiver | undefined;
+			const frame = await waitForVideoFrameSize(
+				receiver,
+				{ xres: 64, yres: 36 },
+				5000,
+			);
+			assertReceivedVideoFrame(frame);
+			const connections = await sender.connections();
+			expect(connections).toBeGreaterThanOrEqual(1);
 
-			try {
-				const source = await waitForSourceByName(senderName);
-				receiver = await grandi.receive({
-					source,
-					name: `${senderName}-receiver`,
-					colorFormat: grandi.ColorFormat.BGRX_BGRA,
-				});
-				const frame = await waitForVideoFrameSize(
-					receiver,
-					{ xres: 64, yres: 36 },
-					5000,
-				);
-				assertReceivedVideoFrame(frame);
-				const connections = await sender.connections();
-				expect(connections).toBeGreaterThanOrEqual(1);
+			const tallyInitial = sender.tally();
+			assertTallyShape(tallyInitial);
+			const tallyStable = sender.tally();
+			expect(tallyStable.changed).toBe(false);
 
-				const tallyInitial = sender.tally();
-				assertTallyShape(tallyInitial);
-				const tallyStable = sender.tally();
-				expect(tallyStable.changed).toBe(false);
+			expect(receiver.tally({ onProgram: true, onPreview: false })).toBe(true);
+			await sleep(200);
+			const tallyProgram = sender.tally();
+			assertTallyShape(tallyProgram);
+			expect(tallyProgram.on_program).toBe(true);
+			expect(tallyProgram.on_preview).toBe(false);
+			expect(tallyProgram.changed).toBe(true);
+			expect(sender.tally().changed).toBe(false);
 
-				expect(receiver.tally({ onProgram: true, onPreview: false })).toBe(
-					true,
-				);
+			expect(receiver.tally({ onProgram: false, onPreview: true })).toBe(true);
+			await sleep(200);
+			const tallyPreview = sender.tally();
+			assertTallyShape(tallyPreview);
+			expect(tallyPreview.on_program).toBe(false);
+			expect(tallyPreview.on_preview).toBe(true);
+			expect(tallyPreview.changed).toBe(true);
+			expect(sender.tally().changed).toBe(false);
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			if (receiver) {
+				receiver.destroy();
 				await sleep(200);
-				const tallyProgram = sender.tally();
-				assertTallyShape(tallyProgram);
-				expect(tallyProgram.on_program).toBe(true);
-				expect(tallyProgram.on_preview).toBe(false);
-				expect(tallyProgram.changed).toBe(true);
+				const tallyAfterDisconnect = sender.tally();
+				assertTallyShape(tallyAfterDisconnect);
+				expect(tallyAfterDisconnect.changed).toBe(true);
 				expect(sender.tally().changed).toBe(false);
+			}
+			sender.destroy();
+		}
+	}, 120_000);
 
-				expect(receiver.tally({ onProgram: false, onPreview: true })).toBe(
-					true,
-				);
-				await sleep(200);
-				const tallyPreview = sender.tally();
-				assertTallyShape(tallyPreview);
-				expect(tallyPreview.on_program).toBe(false);
-				expect(tallyPreview.on_preview).toBe(true);
-				expect(tallyPreview.changed).toBe(true);
-				expect(sender.tally().changed).toBe(false);
-			} finally {
-				controller.running = false;
-				await pumpTask;
-				if (receiver) {
-					receiver.destroy();
-					await sleep(200);
-					const tallyAfterDisconnect = sender.tally();
-					assertTallyShape(tallyAfterDisconnect);
-					expect(tallyAfterDisconnect.changed).toBe(true);
-					expect(sender.tally().changed).toBe(false);
+	test("can route a source to an output", async () => {
+		const senderName = `grandi-route-${Date.now()}`;
+		const routingName = `${senderName}-routing`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: true,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+		let routing: Awaited<ReturnType<typeof grandi.routing>> | undefined;
+		let routedReceiver: Receiver | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			routing = await grandi.routing({ name: routingName });
+			expect(routing.change(source)).toBe(true);
+			expect(routing.sourcename()).toContain(routingName);
+
+			const routedSource = await waitForSourceByName(routingName);
+			routedReceiver = await grandi.receive({
+				source: routedSource,
+				name: `${routingName}-receiver`,
+				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+			});
+
+			const routedFrame = await waitForVideoFrameSize(
+				routedReceiver,
+				{ xres: 64, yres: 36 },
+				5000,
+			);
+			assertReceivedVideoFrame(routedFrame);
+			expect(routing.connections()).toBeGreaterThanOrEqual(1);
+
+			expect(routing.clear()).toBe(true);
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			routedReceiver?.destroy();
+			routing?.destroy();
+			sender.destroy();
+		}
+	}, 120_000);
+
+	test("can framesync video and audio from a receiver", async () => {
+		const senderName = `grandi-fs-${Date.now()}`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: true,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+
+		let receiver: Receiver | undefined;
+		let fs: Awaited<ReturnType<typeof grandi.framesync>> | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			receiver = await grandi.receive({
+				source,
+				name: `${senderName}-receiver`,
+				colorFormat: grandi.ColorFormat.Fastest,
+			});
+
+			fs = await grandi.framesync(receiver);
+
+			// Pull video until we see the expected size (framesync returns timeout when none yet).
+			const expected = { xres: 64, yres: 36 };
+			const deadline = Date.now() + 10_000;
+			let videoFrame: ReceivedVideoFrame | undefined;
+			while (Date.now() < deadline) {
+				const frame = await fs.video();
+				if (frame.type === "timeout") continue;
+				if (frame.xres === expected.xres && frame.yres === expected.yres) {
+					videoFrame = frame;
+					break;
 				}
-				sender.destroy();
 			}
-		},
-		60_000,
-	);
+			if (!videoFrame) {
+				throw new Error("Timed out waiting for framesync video frame");
+			}
+			assertReceivedVideoFrame(videoFrame);
 
-	(isCI ? test.skip : test)(
-		"can route a source to an output",
-		async () => {
-			const senderName = `grandi-route-${Date.now()}`;
-			const routingName = `${senderName}-routing`;
-			const sender = await grandi.send({
-				name: senderName,
-				clockVideo: true,
-				clockAudio: true,
+			const audioFrame = await fs.audio({
+				sampleRate: 48_000,
+				noChannels: 2,
+				noSamples: 1600,
 			});
-			const controller = { running: true };
-			const pumpTask = pumpFrames(sender, controller);
-			let routing: Awaited<ReturnType<typeof grandi.routing>> | undefined;
-			let routedReceiver: Receiver | undefined;
-
-			try {
-				const source = await waitForSourceByName(senderName);
-				routing = await grandi.routing({ name: routingName });
-				expect(routing.change(source)).toBe(true);
-				expect(routing.sourcename()).toContain(routingName);
-
-				const routedSource = await waitForSourceByName(routingName);
-				routedReceiver = await grandi.receive({
-					source: routedSource,
-					name: `${routingName}-receiver`,
-					colorFormat: grandi.ColorFormat.BGRX_BGRA,
-				});
-
-				const routedFrame = await waitForVideoFrameSize(
-					routedReceiver,
-					{ xres: 64, yres: 36 },
-					5000,
-				);
-				assertReceivedVideoFrame(routedFrame);
-				expect(routing.connections()).toBeGreaterThanOrEqual(1);
-
-				expect(routing.clear()).toBe(true);
-			} finally {
-				controller.running = false;
-				await pumpTask;
-				routedReceiver?.destroy();
-				routing?.destroy();
-				sender.destroy();
-			}
-		},
-		60_000,
-	);
+			expect(audioFrame.type).toBe("audio");
+			expect(audioFrame.sampleRate).toBe(48_000);
+			expect(audioFrame.channels).toBe(2);
+			expect(audioFrame.samples).toBeGreaterThan(0);
+			expect(Buffer.isBuffer(audioFrame.data)).toBe(true);
+			expect(fs.audioQueueDepth()).toBeGreaterThanOrEqual(0);
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			fs?.destroy();
+			receiver?.destroy();
+			sender.destroy();
+		}
+	}, 120_000);
 });
