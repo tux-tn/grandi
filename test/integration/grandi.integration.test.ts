@@ -123,9 +123,9 @@ async function waitForVideoFrameSize(
 
 	throw new Error(
 		`Timed out waiting for ${expected.xres}x${expected.yres} video frame` +
-		(lastVideoFrame
-			? `; last was ${lastVideoFrame.xres}x${lastVideoFrame.yres}`
-			: ""),
+			(lastVideoFrame
+				? `; last was ${lastVideoFrame.xres}x${lastVideoFrame.yres}`
+				: ""),
 	);
 }
 
