@@ -4,6 +4,7 @@ import nodeGypBuild from "node-gyp-build";
 import type {
 	Finder,
 	FindOptions,
+	FrameSync,
 	Grandi,
 	ReceiveOptions,
 	Receiver,
@@ -38,6 +39,7 @@ export interface GrandiAddon {
 	destroy(): boolean;
 	find(params?: FindOptions): Promise<Finder>;
 	receive(params: ReceiveOptions): Promise<Receiver>;
+	framesync(receiver: Receiver): Promise<FrameSync>;
 	send(params: SendOptions): Promise<Sender>;
 	routing(params: { name?: string; groups?: string }): Promise<Routing>;
 }
@@ -59,6 +61,9 @@ const noopAddon: GrandiAddon = {
 		return Promise.reject(new Error("Unsupported platform or CPU"));
 	},
 	receive(_params) {
+		return Promise.reject(new Error("Unsupported platform or CPU"));
+	},
+	framesync(_receiver) {
 		return Promise.reject(new Error("Unsupported platform or CPU"));
 	},
 	routing() {
@@ -175,6 +180,27 @@ export const send = addon.send;
  */
 export const receive = addon.receive;
 /**
+ * Creates an NDI frame-synchronizer (time base corrector) backed by an existing receiver.
+ * Use this when you want smooth playback clocked to your own render/audio loop.
+ *
+ * Note: destroy the frame-sync before destroying the receiver.
+ * @param {Receiver} receiver - The receiver instance to frame-sync.
+ * @returns {Promise<FrameSync>} A promise that resolves to a FrameSync instance.
+ * @throws {Error} Promise rejects on unsupported platform/CPU or if framesync creation fails.
+ *
+ * @example
+ * ```js
+ * import grandi from "grandi";
+ * grandi.initialize();
+ * const receiver = await grandi.receive({ source });
+ * const fs = await grandi.framesync(receiver);
+ * const frame = await fs.video(grandi.FrameType.Progressive);
+ * fs.destroy();
+ * receiver.destroy();
+ * ```
+ */
+export const framesync = addon.framesync;
+/**
  * Creates an NDI router for switching between different NDI sources.
  * @param {Object} params - Options for creating the router.
  * @param {string} [params.name] - The name for the router.
@@ -200,6 +226,8 @@ export type {
 	AudioReceiveOptions,
 	Finder,
 	FindOptions,
+	FrameSync,
+	FrameSyncAudioOptions,
 	Grandi,
 	PtpTimestamp,
 	ReceivedAudioFrame,
@@ -226,6 +254,7 @@ const grandi: Grandi = {
 	destroy,
 	send,
 	receive,
+	framesync,
 	routing,
 	find,
 	ColorFormat,

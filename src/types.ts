@@ -203,6 +203,33 @@ export interface Routing {
 	sourcename(): string;
 }
 
+export interface FrameSyncAudioOptions {
+	sampleRate?: number;
+	noChannels?: number;
+	noSamples?: number;
+}
+
+export interface FrameSync {
+	embedded: unknown;
+	/**
+	 * Captures a video frame using NDI frame-synchronization (time base correction).
+	 * Always returns immediately.
+	 *
+	 * If no video has ever been received, resolves with `{ type: "timeout" }`.
+	 */
+	video(fieldType?: FrameType): Promise<ReceivedVideoFrame | TimeoutEvent>;
+	/**
+	 * Captures audio using NDI frame-synchronization (resampled to match your calls).
+	 * Always returns immediately and may insert silence if no audio is present.
+	 */
+	audio(options?: FrameSyncAudioOptions): Promise<ReceivedAudioFrame>;
+	/**
+	 * Returns an approximate depth of the internal audio queue in samples.
+	 */
+	audioQueueDepth(): number;
+	destroy(): boolean;
+}
+
 export interface Finder {
 	sources(): Source[];
 	wait(timeoutMs?: number): boolean;
@@ -315,6 +342,13 @@ export interface Grandi {
 	 * ```
 	 */
 	receive(params: ReceiveOptions): Promise<Receiver>;
+	/**
+	 * Creates an NDI frame-synchronizer (time base corrector) backed by an existing receiver.
+	 * Use this when you want smooth playback clocked to your own render/audio loop.
+	 *
+	 * Note: destroy the frame-sync before destroying the receiver.
+	 */
+	framesync(receiver: Receiver): Promise<FrameSync>;
 	/**
 	 * Creates an NDI router for switching between different NDI sources.
 	 * @param params Router options.

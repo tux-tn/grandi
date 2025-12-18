@@ -29,6 +29,7 @@
 #include "grandi_find.h"
 #include "grandi_send.h"
 #include "grandi_receive.h"
+#include "grandi_framesync.h"
 #include "grandi_routing.h"
 #include "node_api.h"
 
@@ -85,6 +86,7 @@ napi_value Init(napi_env env, napi_value exports) {
       DECLARE_NAPI_METHOD("find", find),
       DECLARE_NAPI_METHOD("send", send),
       DECLARE_NAPI_METHOD("receive", receive),
+      DECLARE_NAPI_METHOD("framesync", framesync),
       DECLARE_NAPI_METHOD("routing", routing)};
   status = napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]),
                                   desc);
