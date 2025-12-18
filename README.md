@@ -284,6 +284,37 @@ Destroy senders and receivers explicitly when finished to release NDI resources.
 - `grandi.isSupportedCPU()` checks whether the host CPU can run the NDI SDK.
 - `grandi.initialize()` / `grandi.destroy()` control the lifetime of the underlying library in advanced scenarios.
 
+## Benchmark
+A loopback benchmark script measures end-to-end send/receive throughput and latency on your machine. It spins up a sender and receiver locally, so a working NDI setup with discovery is required.
+
+- Build first if needed (`npm run build`), then run `npm run bench -- [options]`. The script defaults to 1080p30 with audio and colored output.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--mode realtime|throughput` | `realtime` | `realtime` keeps to the target FPS with clocking enabled; `throughput` sends as fast as possible. |
+| `--duration <sec>` | `5` | Run length in seconds. |
+| `--fps <num>` | `30` | Target frames per second. |
+| `--width <px>` | `1920` | Video width in pixels. |
+| `--height <px>` | `1080` | Video height in pixels. |
+| `--no-audio` | audio on | Disable sending/receiving audio. |
+| `--framesync` | off | Pull frames via the NDI frame-sync API for smoother capture. |
+| `--gc-every <ms>` | `500` | Force `global.gc()` at this interval when `--expose-gc` is enabled. |
+| `--no-color` | color on | Disable ANSI color output. |
+
+`npm run bench` adds `--expose-gc` to keep buffer reuse stable during long runs.
+
+Example (10s, 1080p30, realtime):
+
+```bash
+npm run bench -- --duration 10 --mode realtime --fps 30 --framesync
+```
+
+Example (throughput stress, 720p, video only):
+
+```bash
+npm run bench -- --mode throughput --width 1280 --height 720 --no-audio --no-color
+```
+
 ## Contributing
 Ready to hack on Grandi? Here’s the typical workflow.
 
@@ -302,7 +333,7 @@ Ready to hack on Grandi? Here’s the typical workflow.
 5. **Testing**
 	- `npm test` runs the full Vitest suite (unit + integration stubs).
 	- `npm run test:unit` focuses on pure JS/TS tests.
-	- `RUN_NDI_TESTS=1 npm run test:integration` exercises the native bindings against a real NDI environment; ensure you have available senders/receivers before running.
+	- `npm run test:integration` exercises the native bindings against a real NDI environment;
   - `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
 6. **Linting & formatting**
 	- `npm run lint` / `npm run format` cover the TypeScript/JavaScript sources via Biome.
