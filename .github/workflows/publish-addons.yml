@@ -1,0 +1,82 @@
+name: Publish addons
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (defaults to root package.json)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish-addon:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            pkgDir: packages/linux-x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            pkgDir: packages/linux-arm64
+            dockerImage: ghcr.io/prebuild/linux-arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm
+            pkgDir: packages/linux-armv7l
+            dockerImage: ghcr.io/prebuild/linux-armv7
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            pkgDir: packages/win32-x64
+          - os: windows-latest
+            platform: win32
+            arch: ia32
+            pkgDir: packages/win32-ia32
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+            pkgDir: packages/darwin-universal
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.5"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Set explicit version
+        if: ${{ inputs.version != '' }}
+        run: node scripts/bump-version.mjs "${{ inputs.version }}"
+
+      - name: Build addon (host)
+        if: ${{ !matrix.dockerImage }}
+        run: |
+          node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+
+      - name: Build addon (docker cross)
+        if: ${{ matrix.dockerImage != '' }}
+        run: |
+          docker run --rm -u $(id -u):$(id -g) -v $PWD:/input -w /input ${{ matrix.dockerImage }} /bin/bash -lc "\
+            npm install && \
+            node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} \
+          "
+
+      - name: Publish package
+        run: npm publish ${{ matrix.pkgDir }} --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

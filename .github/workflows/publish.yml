@@ -11,66 +11,8 @@ permissions:
   id-token: write
 
 jobs:
-  prebuild:
-    name: Prebuild (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.19.5"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build TypeScript sources
-        run: npm run build
-
-      - name: Prebuild binaries
-        run: npm run prebuild
-
-      - if: matrix.os == 'ubuntu-latest'
-        name: Prebuild binaries for arm64 and armv7l Linux
-        run: |
-            docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-armv7 npm run prebuild
-            docker run -u $(id -u):$(id -g) -v $(pwd):/input -w /input ghcr.io/prebuild/linux-arm64 npm run prebuild
-
-      - if: matrix.os == 'ubuntu-latest'
-        name: Prebuild binaries for x86 Linux
-        run: |
-            sudo apt-get update
-            sudo apt-get install -y libc6-dev-i386 g++-13-multilib
-            npm run prebuild -- --arch=ia32
-
-      - if: matrix.os == 'macos-latest'
-        name: Prebuild binaries for x64 macOS
-        run: |
-            npm run prebuild -- --arch=x64
-
-      - if: matrix.os == 'windows-latest'
-        name: Prebuild binaries for x86 Windows
-        run: |
-            npm run prebuild -- --arch=ia32
-      - name: Upload prebuild artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: prebuilds-${{ matrix.os }}
-          path: prebuilds
-
   publish:
     name: Publish to npm
-    needs: prebuild
     runs-on: ubuntu-latest
 
     steps:
@@ -80,29 +22,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.5"
-          registry-url: "https://registry.npmjs.org"
+          node-version: "24"
 
       - name: Install dependencies
         run: npm install
-
-      - name: Download Linux prebuilds
-        uses: actions/download-artifact@v5
-        with:
-          name: prebuilds-ubuntu-latest
-          path: prebuilds
-
-      - name: Download macOS prebuilds
-        uses: actions/download-artifact@v5
-        with:
-          name: prebuilds-macos-latest
-          path: prebuilds
-
-      - name: Download Windows prebuilds
-        uses: actions/download-artifact@v5
-        with:
-          name: prebuilds-windows-latest
-          path: prebuilds
 
       - name: bundle typescript sources
         run: npm run build

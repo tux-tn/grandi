@@ -1,0 +1,24 @@
+{
+	"name": "@grandi/linux-arm64",
+	"version": "1.0.0",
+	"description": "Prebuilt grandi native addon for Linux arm64",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/tux-tn/grandi.git"
+	},
+	"license": "Apache-2.0",
+	"os": [
+		"linux"
+	],
+	"cpu": [
+		"arm64"
+	],
+	"main": "grandi.node",
+	"files": [
+		"grandi.node",
+		"libndi.*",
+		"LICENSE",
+		"libndi_licenses.txt",
+		"README.md"
+	]
+}

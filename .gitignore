@@ -8,3 +8,7 @@ prebuilds
 package-lock.json
 yarn.lock
 coverage
+packages/**
+!packages/
+!packages/**/
+!packages/**/package.json

@@ -33,16 +33,16 @@ NDI™ was conceived as a grand vision for IP media transport. The earliest bind
 - Pull requests tackling these gaps (or other NDI 6.x+ features) are very welcome.
 
 ## Supported platforms
-Grandi currently ships prebuilt binaries for the same platforms supported by the original project. Additional platforms can be compiled from source if the NDI SDK supports them.
+Grandi publishes per-architecture packages (`@grandi/<os>-<arch>`) that bundle the native addon and the matching NDI SDK runtime. Additional platforms can be compiled from source if the NDI SDK supports them.
 
 | Operating system | Architectures | Status | Notes |
 | --- | --- | --- | --- |
-| Windows | x86, x64 | ✅ Prebuilt | Visual Studio 2013 C runtime only needed when building locally; prebuilt binaries include the required DLLs. |
-| macOS | Universal (x64 + arm64) | ✅ Prebuilt | Ships with the official universal NDI™ driver, so Intel and Apple Silicon hosts run natively. |
-| Linux | x86, x64, armv7l, arm64 | ✅ Prebuilt | Built against the glibc-based NDI™ SDK; requires `libavahi-common.so.3`, `libavahi-client.so.3`, and the `avahi-daemon` service. |
+| Windows | x86, x64 | ✅ Published as `@grandi/win32-ia32` and `@grandi/win32-x64`. Visual Studio 2013 C runtime only needed when building locally. |
+| macOS | Universal (x64 + arm64) | ✅ Published as `@grandi/darwin-universal`, built against the official universal NDI™ runtime. |
+| Linux | x86, x64, armv7l, arm64 | ✅ Published as `@grandi/linux-x64`, `@grandi/linux-arm64`, `@grandi/linux-armv7l`. Built against the glibc-based NDI™ SDK; requires `libavahi-common.so.3`, `libavahi-client.so.3`, and the `avahi-daemon` service. |
 
 ## Installation
-Install [Node.js](http://nodejs.org/) for your platform (tested against the current Long Term Support release). Then add the dependency to your project:
+Install [Node.js](http://nodejs.org/) for your platform (tested against the current Long Term Support release). The main package automatically pulls the platform-specific optional dependency `@grandi/<os>-<arch>` when it exists, and falls back to building from source otherwise. Add the dependency to your project:
 
 ```bash
 npm install grandi
@@ -52,7 +52,7 @@ pnpm add grandi
 yarn add grandi
 ```
 
-On Windows, you only need the Visual Studio 2013 C run-times when building from source (e.g., running `npm install` without matching prebuilds). You can grab them from <https://www.microsoft.com/en-us/download/details.aspx?id=40784>, but end users consuming the published prebuilt binaries do **not** need to install them.
+On Windows, you only need the Visual Studio 2013 C run-times when building from source (e.g., running `npm install` on an unsupported platform). You can grab them from <https://www.microsoft.com/en-us/download/details.aspx?id=40784>; consumers using the published `@grandi/win32-*` packages do **not** need to install them manually.
 
 Grandi is designed to be `require`d or `import`ed from your own applications:
 
@@ -63,7 +63,7 @@ const grandi = require("grandi");
 ```
 
 ## Build & distribution
-The project uses [prebuildify](https://github.com/prebuild/prebuildify) to prebuild the Node.js addon and bundle the NDI SDK libraries for the supported targets shown above. Those prebuilds are resolved at runtime via [node-gyp-build](https://github.com/prebuild/node-gyp-build), so consumers do not need a compiler toolchain in most cases. When no prebuild matches the running platform, `node-gyp-build` falls back to compiling locally, letting advanced users add additional architectures.
+Each platform package under the `@grandi/` scope bundles the native addon (`grandi.node`) and the corresponding NDI SDK runtime for that OS/arch. The root `grandi` package loads the matching optional dependency first and only compiles locally when no published package is available. Maintainers regenerate those packages from the official NDI SDK by running `node scripts/preinstall.mjs` (to download and stage the SDK) followed by a version bump (e.g., `node scripts/bump-version.mjs <version>`).
 
 ## Using Grandi
 This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. All calls are asynchronous and use JavaScript promises with all of the underlying work of NDI running on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs` and `examples/simple-sender.mjs`.
@@ -342,13 +342,11 @@ Ready to hack on Grandi? Here’s the typical workflow.
 1. **Install prerequisites**
 	- Node.js ≥ 20.19.5 and a working C/C++ toolchain for your platform.
 	- Git LFS is *not* required; the NDI SDK is fetched dynamically.
-2. **Download the NDI SDK + install deps**
-	- Run `npm install` (or `pnpm install`/`yarn install`). The `scripts/preinstall.mjs` hook downloads and unpacks the official NDI SDK into `ndi/`, then `node-gyp-build` compiles the native addon for your host platform. Re-run `npm install` after deleting `ndi/` if you need to refresh the SDK.
-	- To force-download all prebuild assets for release testing, run `npm run prebuild:download`.
-	- Set `NDI_FORCE=1` if you need to run the downloader in an unpacked tarball (normally it only runs inside the git repo).
+2. **Download the NDI SDK (maintainers)**
+	- Run `node scripts/build-addon.mjs` to download and unpack the official NDI SDK into `ndi/` and populate the per-arch package folders under `packages/` with the right runtime files.
+	- Consumers don’t need this step; they install the appropriate `@grandi/<os>-<arch>` package from npm automatically.
 3. **TypeScript build**
 	- `npm run build` compiles `src/` via `tsdown`, emitting ESM/CJS bundles and declaration files in `dist/`.
-	- `npm run prebuild` packages native binaries for distribution (requires the SDK assets fetched earlier).
 4. **Native addon rebuild**
 	- If you change C/C++ files under `lib/`, recompile with `npx node-gyp-build` (or simply re-run `npm install`). This uses the same loader that consumers invoke at runtime.
 5. **Testing**
@@ -361,7 +359,6 @@ Ready to hack on Grandi? Here’s the typical workflow.
 	- `npm run format:cpp` formats the native sources with `clang-format`.
 7. **Manual verification**
 	- `node examples/simple-sender.mjs` and `node examples/simple-receiver.mjs` are quick smoke tests for the send/receive API.
-	- Use `NDI_FORCE=1 npm install` if you need to reassemble the NDI SDK artifacts even when they are already present.
 
 Before opening a pull request, make sure the linter, formatter, and tests all pass, and include context for any platform-specific considerations (e.g., SDK versions, OS dependencies).
 
@@ -472,7 +469,7 @@ Apart from the exceptions below, this software is released under the Apache 2.0 
 The software uses libraries provided under a royalty-free license from NewTek, Inc. (see the [NDI SDK License](https://ndi.link/ndisdk_license) for full terms):
 
 - The `ndi/include` includes files are licensed separately by NewTek under the MIT license.
-- The DLL and library files are provided for installation convenience and are covered by the NewTek license in the `prebuilds/` folder.
+- The DLL and library files are provided for installation convenience and are covered by the NewTek license in the scoped packages under `packages/` (published as `@grandi/*`).
 
 ## Trademarks
 NDI™  is a trademark of NewTek, Inc.

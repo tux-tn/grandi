@@ -3,29 +3,106 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { pipeline } from "node:stream/promises";
-import { fileURLToPath } from "node:url";
 import zip from "cross-zip";
 import { execa } from "execa";
 import got from "got";
 import shell from "shelljs";
 import tmp from "tmp";
 
-const isRepoCheckout = fs.existsSync(
-	path.join(path.dirname(fileURLToPath(import.meta.url)), "./../.git"),
-);
-const forceRebuild = process.env.NDI_FORCE?.toString() === "1";
-
-if (!isRepoCheckout && !forceRebuild) {
-	console.log("[grandi] Skipping preinstall: running from packaged release.");
-	console.log("[grandi] Set NDI_FORCE=1 to run the downloader manually.");
-	process.exit(0);
-}
-
 // Ensure tmp cleans up on process exit
 tmp.setGracefulCleanup();
 
 const platform = os.platform();
 const arch = os.arch();
+function parseArgs(argv) {
+	const out = {};
+	for (let i = 2; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === "--platform") {
+			out.platform = argv[i + 1];
+			i++;
+		} else if (arg === "--arch") {
+			out.arch = argv[i + 1];
+			i++;
+		}
+	}
+	return out;
+}
+
+const cli = parseArgs(process.argv);
+const targetPlatform = cli.platform ?? platform;
+const targetArch = cli.arch ?? arch;
+const targetKey = `${targetPlatform}-${targetArch}`;
+const TARGETS = {
+	"linux-x64": {
+		pkgDir: "packages/linux-x64",
+		gypArch: "x64",
+		sources: [
+			"ndi/lib/lnx-x64/libndi.so.6",
+			"ndi/lib/lnx-x64/libndi.so",
+			"ndi/lib/LICENSE",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+	"linux-arm64": {
+		pkgDir: "packages/linux-arm64",
+		gypArch: "arm64",
+		sources: [
+			"ndi/lib/lnx-arm64/libndi.so.6",
+			"ndi/lib/lnx-arm64/libndi.so",
+			"ndi/lib/LICENSE",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+	"linux-arm": {
+		pkgDir: "packages/linux-armv7l",
+		gypArch: "arm",
+		sources: [
+			"ndi/lib/lnx-armv7l/libndi.so.6",
+			"ndi/lib/lnx-armv7l/libndi.so",
+			"ndi/lib/LICENSE",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+	"win32-x64": {
+		pkgDir: "packages/win32-x64",
+		gypArch: "x64",
+		sources: [
+			"ndi/lib/win-x64/Processing.NDI.Lib.x64.dll",
+			"ndi/lib/win-x64/Processing.NDI.Lib.x64.lib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+	"win32-ia32": {
+		pkgDir: "packages/win32-ia32",
+		gypArch: "ia32",
+		sources: [
+			"ndi/lib/win-x86/Processing.NDI.Lib.x86.dll",
+			"ndi/lib/win-x86/Processing.NDI.Lib.x86.lib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+	"darwin-arm64": {
+		pkgDir: "packages/darwin-universal",
+		gypArch: "arm64",
+		sources: [
+			"ndi/lib/macOS/libndi.dylib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+	"darwin-x64": {
+		pkgDir: "packages/darwin-universal",
+		gypArch: "x64",
+		sources: [
+			"ndi/lib/macOS/libndi.dylib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt",
+		],
+	},
+};
 const supportsColor = process.stdout.isTTY && process.env.NO_COLOR !== "1";
 const isInteractiveTerminal = process.stdout.isTTY && process.env.CI !== "true";
 
@@ -200,6 +277,85 @@ function ndiSubsetPresent() {
 	}
 }
 
+function populatePackageLibs() {
+	const meta = TARGETS[targetKey];
+	if (!meta) {
+		log.warn(
+			`No scoped package mapping for ${targetPlatform}/${targetArch}; skipping library copy.`,
+		);
+		return;
+	}
+	if (!fs.existsSync(meta.pkgDir)) {
+		log.warn(`Package directory missing: ${meta.pkgDir}`);
+		return;
+	}
+
+	const existingSources = meta.sources.filter((src) => fs.existsSync(src));
+	if (existingSources.length === 0) {
+		log.warn(
+			`No NDI libraries found for ${targetPlatform}/${targetArch}; did the SDK extract for this platform?`,
+		);
+		return;
+	}
+
+	shell.mkdir("-p", meta.pkgDir);
+	for (const src of existingSources) {
+		shell.cp("-f", src, meta.pkgDir);
+	}
+	log.success(
+		`Populated ${meta.pkgDir} with ${existingSources.length} NDI file(s).`,
+	);
+}
+
+function copyVersionFile(rootDir) {
+	try {
+		const matches = shell
+			.find(rootDir)
+			.filter((filePath) => path.basename(filePath) === "Version.txt");
+		if (!matches || matches.length === 0) {
+			log.warn("NDI Version.txt not found in extracted distribution.");
+			return;
+		}
+		const targetDir = path.join("ndi");
+		shell.mkdir("-p", targetDir);
+		const target = path.join(targetDir, "Version.txt");
+		shell.cp("-f", matches[0], target);
+		log.info(`Stored NDI version file at ${target}`);
+	} catch (e) {
+		const message =
+			e instanceof Error ? e.message : e ? String(e) : "Unknown error";
+		log.warn(`Unable to copy NDI Version.txt: ${message}`);
+	}
+}
+
+async function buildAddon(packageDir) {
+	log.heading("Building native addon");
+	log.info(`Target: ${targetPlatform}/${targetArch}`);
+	const productDir = path.resolve(packageDir);
+	shell.mkdir("-p", productDir);
+	const meta = TARGETS[targetKey];
+	const buildArch = meta?.gypArch ?? targetArch;
+
+	await execa(
+		"npx",
+		[
+			"node-gyp",
+			"rebuild",
+			`--arch=${buildArch}`,
+			"--",
+			`-Dproduct_dir=${productDir}`,
+		],
+		{ stdio: "inherit" },
+	);
+
+	const built = path.join("build", "Release", "grandi.node");
+	if (!fs.existsSync(built)) {
+		throw new Error(`Built addon not found at ${built}`);
+	}
+	shell.cp("-f", built, productDir);
+	log.success(`Copied addon to ${productDir}/grandi.node`);
+}
+
 async function main() {
 	log.heading("NDI SDK bootstrap");
 	log.info(`Detected platform: ${platform}/${arch}`);
@@ -213,10 +369,11 @@ async function main() {
 		log.warn("Current platform is not supported; skipping NDI SDK setup.");
 		return;
 	}
-	if (!forceRebuild && ndiSubsetPresent()) {
-		log.success(
-			"NDI SDK subset already present; skipping re-assembly (set NDI_FORCE=1 to force)",
-		);
+	if (ndiSubsetPresent()) {
+		if (!fs.existsSync(path.join("ndi", "Version.txt"))) {
+			log.warn("NDI version file missing; rerun the script to refresh.");
+		}
+		log.success("NDI SDK subset already present; skipping re-assembly.");
 	} else {
 		log.step("Cleaning existing NDI SDK and build artifacts");
 		shell.rm("-rf", "ndi");
@@ -277,6 +434,7 @@ async function main() {
 				path.join(extractDir, "app/Bin/x64/Processing.NDI.Lib.Licenses.txt"),
 				"ndi/lib/libndi_licenses.txt",
 			);
+			copyVersionFile(extractDir);
 			log.step("Removing temporary files");
 			shell.rm("-f", innoZip);
 			shell.rm("-f", ndiExe);
@@ -323,6 +481,7 @@ async function main() {
 				path.join(workDir, "NDI SDK for Apple/NDI SDK License Agreement.pdf"),
 				"ndi/lib/LICENSE.pdf",
 			);
+			copyVersionFile(workDir);
 
 			log.step("Removing temporary files");
 			shell.rm("-f", pkgFile);
@@ -389,6 +548,7 @@ async function main() {
 				path.join(workDir, "NDI SDK for Linux/licenses/libndi_licenses.txt"),
 				"ndi/lib/",
 			);
+			copyVersionFile(workDir);
 			const linuxArchDirs = [
 				"ndi/lib/lnx-x86",
 				"ndi/lib/lnx-x64",
@@ -402,7 +562,6 @@ async function main() {
 					if (real) {
 						const realPath = path.join(d, real);
 						const so6 = path.join(d, "libndi.so.6");
-						const so = path.join(d, "libndi.so");
 						if (fs.existsSync(so6)) {
 							await fs.promises.unlink(so6);
 							await fs.promises.copyFile(realPath, so6);
@@ -419,6 +578,18 @@ async function main() {
 			shell.rm("-rf", workDir);
 		}
 	}
+
+	populatePackageLibs();
+
+	const meta = TARGETS[targetKey];
+	if (!meta) {
+		log.warn(
+			`No scoped package mapping for ${targetPlatform}/${targetArch}; skipping addon build.`,
+		);
+		return;
+	}
+
+	await buildAddon(meta.pkgDir);
 }
 
 main().catch((err) => {

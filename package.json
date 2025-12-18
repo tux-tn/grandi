@@ -13,15 +13,10 @@
 	"author": "Sarhan Aissi <npm@tux.tn>",
 	"license": "Apache-2.0",
 	"files": [
-		"binding.gyp",
 		"dist",
-		"lib",
-		"src",
-		"scripts",
 		"LICENSE",
 		"NOTICE",
-		"README.md",
-		"prebuilds"
+		"README.md"
 	],
 	"main": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
@@ -36,6 +31,14 @@
 	},
 	"bugs": {
 		"url": "https://github.com/tux-tn/grandi/issues"
+	},
+	"optionalDependencies": {
+		"@grandi/linux-x64": "1.0.0",
+		"@grandi/linux-arm64": "1.0.0",
+		"@grandi/linux-armv7l": "1.0.0",
+		"@grandi/win32-x64": "1.0.0",
+		"@grandi/win32-ia32": "1.0.0",
+		"@grandi/darwin-universal": "1.0.0"
 	},
 	"dependencies": {
 		"cross-spawn": "7.0.6",
@@ -55,7 +58,6 @@
 		"@types/tmp": "^0.2.6",
 		"@vitest/coverage-v8": "^4.0.15",
 		"cross-env": "^10.1.0",
-		"prebuildify": "^6.0.1",
 		"shx": "0.4.0",
 		"standard-version": "^9.5.0",
 		"tsdown": "^0.18.0",
@@ -63,11 +65,7 @@
 		"vitest": "^4.0.15"
 	},
 	"scripts": {
-		"preinstall": "node scripts/preinstall.mjs",
-		"install": "node-gyp-build",
-		"prebuild:download": "cross-env NDI_FORCE=1 node scripts/preinstall.mjs",
 		"build": "tsdown",
-		"prebuild": "prebuildify --napi --strip --target=node@20.19.5",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:unit": "vitest run test/unit",

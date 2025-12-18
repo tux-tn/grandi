@@ -32,6 +32,36 @@ function isSupportedPlatform(): boolean {
 	);
 }
 
+function tryRequireArchPackage(): GrandiAddon | null {
+	const archKey = `${process.platform}-${process.arch}`;
+	const map: Record<string, string> = {
+		"linux-x64": "@grandi/linux-x64",
+		"linux-arm64": "@grandi/linux-arm64",
+		"linux-arm": "@grandi/linux-armv7l",
+		"win32-x64": "@grandi/win32-x64",
+		"win32-ia32": "@grandi/win32-ia32",
+		"darwin-x64": "@grandi/darwin-universal",
+		"darwin-arm64": "@grandi/darwin-universal",
+	};
+	const pkg = map[archKey];
+	if (!pkg) return null;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		return require(pkg) as GrandiAddon;
+	} catch (err: any) {
+		// If the package is missing, fall back to local build resolution.
+		if (err && err.code === "MODULE_NOT_FOUND") return null;
+		throw err;
+	}
+}
+
+function loadAddon(): GrandiAddon {
+	if (!isSupportedPlatform()) return noopAddon;
+	const archAddon = tryRequireArchPackage();
+	if (archAddon) return archAddon;
+	return nodeGypBuild(path.join(__dirname, "..")) as GrandiAddon;
+}
+
 export interface GrandiAddon {
 	version(): string;
 	isSupportedCPU(): boolean;
@@ -74,9 +104,7 @@ const noopAddon: GrandiAddon = {
 	},
 };
 
-const addon: GrandiAddon = isSupportedPlatform()
-	? (nodeGypBuild(path.join(__dirname, "..")) as GrandiAddon)
-	: noopAddon;
+const addon: GrandiAddon = loadAddon();
 
 /**
  * Creates a finder to discover NDI sources on the network.
