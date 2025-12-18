@@ -99,49 +99,6 @@ bool captureUntilFrame(dataCarrier *c, NDIlib_frame_type_e desired,
     }
   }
 }
-
-size_t videoDataSize(const NDIlib_video_frame_v2_t &frame) {
-  size_t stride = static_cast<size_t>(std::abs(frame.line_stride_in_bytes));
-  size_t lines = static_cast<size_t>(frame.yres);
-  size_t pixelsPerLine = static_cast<size_t>(frame.xres);
-  if (stride == 0) {
-    switch (frame.FourCC) {
-    case NDIlib_FourCC_type_UYVY:
-    case NDIlib_FourCC_type_UYVA:
-      stride = pixelsPerLine * 2;
-      break;
-    case NDIlib_FourCC_type_BGRA:
-    case NDIlib_FourCC_type_BGRX:
-    case NDIlib_FourCC_type_RGBA:
-    case NDIlib_FourCC_type_RGBX:
-      stride = pixelsPerLine * 4;
-      break;
-    case NDIlib_FourCC_type_P216:
-    case NDIlib_FourCC_type_PA16:
-      stride = pixelsPerLine * sizeof(uint16_t);
-      break;
-    default:
-      break;
-    }
-  }
-
-  switch (frame.FourCC) {
-  case NDIlib_FourCC_type_UYVA:
-    // UYVY plane uses line_stride_in_bytes; alpha plane follows immediately
-    // and uses stride/2 bytes per line (see NDI docs custom allocator example).
-    return stride * lines + (stride / 2) * lines;
-  case NDIlib_FourCC_type_P216:
-    return stride * lines * 2; // Y plane + UV plane
-  case NDIlib_FourCC_type_PA16:
-    return stride * lines * 3; // Y plane + UV plane + alpha plane
-  case NDIlib_FourCC_type_YV12:
-  case NDIlib_FourCC_type_I420:
-  case NDIlib_FourCC_type_NV12:
-    return stride * lines + (stride * lines) / 2; // 4:2:0 layouts
-  default:
-    return stride * lines; // Single-plane formats
-  }
-}
 } // namespace
 
 void finalizeReceive(napi_env env, void *data, void *hint) {
