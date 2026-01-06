@@ -238,8 +238,7 @@ async function downloadToFile(url, options = {}) {
 
 	tracker.start();
 	const downloadStream = got.stream(url, {
-		retry: { limit: 3 },
-		timeout: { request: 60_000 },
+		retry: { limit: 3 }
 	});
 	downloadStream.on("downloadProgress", (progress) => {
 		tracker.update(progress);
