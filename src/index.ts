@@ -56,10 +56,27 @@ function tryRequireArchPackage(): GrandiAddon | null {
 }
 
 function loadAddon(): GrandiAddon {
-	if (!isSupportedPlatform()) return noopAddon;
-	const archAddon = tryRequireArchPackage();
-	if (archAddon) return archAddon;
-	return nodeGypBuild(path.join(__dirname, "..")) as GrandiAddon;
+	const loadErrors: Error[] = [];
+	try {
+		if (!isSupportedPlatform()) return noopAddon;
+		const localBinding = nodeGypBuild(path.join(__dirname, "..")) as GrandiAddon;
+		if (localBinding) return localBinding;
+	} catch (err) {
+		loadErrors.push(err as Error);
+	}
+	try {
+		const archAddon = tryRequireArchPackage();
+		if (archAddon) return archAddon;
+	} catch (err) {
+		loadErrors.push(err as Error);
+	}
+
+	if (loadErrors.length > 0) {
+		const aggregateError = new Error("Failed to load native addon:\n" +
+			loadErrors.map((e, i) => `  [${i + 1}] ${e.message}`).join("\n"));
+		console.error(aggregateError);
+	}
+	return noopAddon;
 }
 
 export interface GrandiAddon {
@@ -105,7 +122,6 @@ const noopAddon: GrandiAddon = {
 };
 
 const addon: GrandiAddon = loadAddon();
-
 /**
  * Creates a finder to discover NDI sources on the network.
  * @param {FindOptions} [params={}] - Options for finding sources.
