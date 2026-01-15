@@ -238,7 +238,7 @@ async function downloadToFile(url, options = {}) {
 
 	tracker.start();
 	const downloadStream = got.stream(url, {
-		retry: { limit: 3 }
+		retry: { limit: 3 },
 	});
 	downloadStream.on("downloadProgress", (progress) => {
 		tracker.update(progress);
@@ -577,6 +577,7 @@ async function main() {
 						if (fs.existsSync(so6)) {
 							await fs.promises.unlink(so6);
 							await fs.promises.copyFile(realPath, so6);
+							await fs.promises.unlink(realPath);
 						}
 					}
 				} catch (e) {
