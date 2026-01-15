@@ -44,16 +44,14 @@ function tryRequireArchPackage(): GrandiAddon | null {
 		"darwin-arm64": "@grandi/darwin-universal",
 	};
 	const pkg = map[archKey];
-	if (!pkg) return null;
+	if (!pkg) throw new Error(`Unsupported platform or architecture: ${archKey}`);
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		return require(pkg) as GrandiAddon;
-	} catch (err: any) {
-		if (err && err.code === "MODULE_NOT_FOUND")
-			throw new Error(
-				`Failed to find prebuilt package for ${archKey}. Please ensure that the package "${pkg}" is installed`,
-			);
-		throw err;
+	} catch {
+		throw new Error(
+			`Failed to find prebuilt package for ${archKey}. Please ensure that the package "${pkg}" is installed`,
+		);
 	}
 }
 
