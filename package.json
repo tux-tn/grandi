@@ -33,21 +33,15 @@
 		"url": "https://github.com/tux-tn/grandi/issues"
 	},
 	"optionalDependencies": {
-		"@grandi/linux-x64": "^1.1.0",
-		"@grandi/linux-arm64": "^1.1.0",
-		"@grandi/linux-armv7l": "^1.1.0",
-		"@grandi/win32-x64": "^1.1.0",
-		"@grandi/win32-ia32": "^1.1.0",
-		"@grandi/darwin-universal": "^1.1.0"
+		"@grandi/linux-x64": "1.1.0",
+		"@grandi/linux-arm64": "1.1.0",
+		"@grandi/linux-armv7l": "1.1.0",
+		"@grandi/win32-x64": "1.1.0",
+		"@grandi/win32-ia32": "1.1.0",
+		"@grandi/darwin-universal": "1.1.0"
 	},
 	"dependencies": {
-		"cross-spawn": "7.0.6",
-		"cross-zip": "4.0.1",
-		"execa": "9.6.1",
-		"got": "14.6.5",
-		"node-gyp-build": "^4.8.4",
-		"shelljs": "0.10.0",
-		"tmp": "0.2.5"
+		"node-gyp-build": "^4.8.4"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.9",
@@ -58,8 +52,14 @@
 		"@types/tmp": "^0.2.6",
 		"@vitest/coverage-v8": "^4.0.15",
 		"cross-env": "^10.1.0",
+		"cross-spawn": "7.0.6",
+		"cross-zip": "4.0.1",
+		"execa": "9.6.1",
+		"got": "14.6.5",
+		"shelljs": "0.10.0",
 		"shx": "0.4.0",
 		"standard-version": "^9.5.0",
+		"tmp": "0.2.5",
 		"tsdown": "^0.18.0",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.15"
@@ -67,6 +67,7 @@
 	"scripts": {
 		"bench": "node --expose-gc scripts/benchmark.mjs",
 		"build": "tsdown",
+		"build:addon": "node scripts/build-addon.mjs",
 		"clean": "shx rm -rf ndi build",
 		"format": "biome format",
 		"format:cpp": "clang-format -i lib/*.cc lib/*.h",
