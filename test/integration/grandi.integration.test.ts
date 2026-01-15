@@ -1,7 +1,5 @@
-import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import nodeGypBuild from "node-gyp-build";
 import { afterAll, beforeAll, describe, expect, it, test } from "vitest";
 
 import grandi from "../../src/index";
