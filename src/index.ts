@@ -49,17 +49,26 @@ function tryRequireArchPackage(): GrandiAddon | null {
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		return require(pkg) as GrandiAddon;
 	} catch (err: any) {
-		// If the package is missing, fall back to local build resolution.
-		if (err && err.code === "MODULE_NOT_FOUND") return null;
+		if (err && err.code === "MODULE_NOT_FOUND")
+			throw new Error(
+				`Failed to find prebuilt package for ${archKey}. Please ensure that the package "${pkg}" is installed`,
+			);
 		throw err;
 	}
 }
 
 function loadAddon(): GrandiAddon {
 	const loadErrors: Error[] = [];
+	if (!isSupportedPlatform()) {
+		console.error(
+			`Unsupported platform or architecture: ${process.platform}-${process.arch}`,
+		);
+		return noopAddon;
+	}
 	try {
-		if (!isSupportedPlatform()) return noopAddon;
-		const localBinding = nodeGypBuild(path.join(__dirname, "..")) as GrandiAddon;
+		const localBinding = nodeGypBuild(
+			path.join(__dirname, ".."),
+		) as GrandiAddon;
 		if (localBinding) return localBinding;
 	} catch (err) {
 		loadErrors.push(err as Error);
@@ -72,8 +81,10 @@ function loadAddon(): GrandiAddon {
 	}
 
 	if (loadErrors.length > 0) {
-		const aggregateError = new Error("Failed to load native addon:\n" +
-			loadErrors.map((e, i) => `  [${i + 1}] ${e.message}`).join("\n"));
+		const aggregateError = new Error(
+			"Failed to load native addon:\n" +
+				loadErrors.map((e, i) => `  [${i + 1}] ${e.message}`).join("\n"),
+		);
 		console.error(aggregateError);
 	}
 	return noopAddon;
