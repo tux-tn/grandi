@@ -1,4 +1,5 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
@@ -11,6 +12,9 @@ import tmp from "tmp";
 
 // Ensure tmp cleans up on process exit
 tmp.setGracefulCleanup();
+
+const require = createRequire(import.meta.url);
+const nodeGypBin = require.resolve("node-gyp/bin/node-gyp.js");
 
 const platform = os.platform();
 const arch = os.arch();
@@ -39,7 +43,6 @@ const TARGETS = {
 		gypArch: "x64",
 		sources: [
 			"ndi/lib/lnx-x64/libndi.so.6",
-			"ndi/lib/lnx-x64/libndi.so",
 			"ndi/lib/LICENSE",
 			"ndi/lib/libndi_licenses.txt",
 		],
@@ -49,7 +52,6 @@ const TARGETS = {
 		gypArch: "arm64",
 		sources: [
 			"ndi/lib/lnx-arm64/libndi.so.6",
-			"ndi/lib/lnx-arm64/libndi.so",
 			"ndi/lib/LICENSE",
 			"ndi/lib/libndi_licenses.txt",
 		],
@@ -59,7 +61,6 @@ const TARGETS = {
 		gypArch: "arm",
 		sources: [
 			"ndi/lib/lnx-armv7l/libndi.so.6",
-			"ndi/lib/lnx-armv7l/libndi.so",
 			"ndi/lib/LICENSE",
 			"ndi/lib/libndi_licenses.txt",
 		],
@@ -136,6 +137,15 @@ const log = {
 	warn: (message) => console.warn(`${icons.warn} ${message}`),
 	error: (message) => console.error(`${icons.error} ${message}`),
 };
+
+async function pathExists(filePath) {
+	try {
+		await fs.access(filePath);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 function formatBytes(bytes) {
 	if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -244,21 +254,29 @@ async function downloadToFile(url, options = {}) {
 		tracker.update(progress);
 	});
 
+	const fileHandle = await fs.open(filePath, "w");
+	const writeStream = fileHandle.createWriteStream({ autoClose: false });
 	try {
-		await pipeline(downloadStream, fs.createWriteStream(filePath));
+		await pipeline(downloadStream, writeStream);
 		tracker.finish();
 		return filePath;
 	} catch (error) {
 		tracker.fail(error);
 		throw error;
+	} finally {
+		try {
+			await fileHandle.close();
+		} catch {
+			// Ignore cleanup failures to preserve the original error.
+		}
 	}
 }
 
-function ndiSubsetPresent() {
+async function ndiSubsetPresent() {
 	try {
 		// Basic sanity: headers exist and at least one lib directory has files
 		const header = path.join("ndi", "include", "Processing.NDI.Lib.h");
-		if (!fs.existsSync(header)) return false;
+		if (!(await pathExists(header))) return false;
 		const libDirs = [
 			path.join("ndi", "lib", "win-x86"),
 			path.join("ndi", "lib", "win-x64"),
@@ -268,15 +286,17 @@ function ndiSubsetPresent() {
 			path.join("ndi", "lib", "lnx-armv7l"),
 			path.join("ndi", "lib", "lnx-arm64"),
 		];
-		return libDirs.some(
-			(d) => fs.existsSync(d) && fs.readdirSync(d).length > 0,
-		);
+		for (const dir of libDirs) {
+			if (!(await pathExists(dir))) continue;
+			if ((await fs.readdir(dir)).length > 0) return true;
+		}
+		return false;
 	} catch {
 		return false;
 	}
 }
 
-function populatePackageLibs() {
+async function populatePackageLibs() {
 	const meta = TARGETS[targetKey];
 	if (!meta) {
 		log.warn(
@@ -284,12 +304,15 @@ function populatePackageLibs() {
 		);
 		return;
 	}
-	if (!fs.existsSync(meta.pkgDir)) {
+	if (!(await pathExists(meta.pkgDir))) {
 		log.warn(`Package directory missing: ${meta.pkgDir}`);
 		return;
 	}
 
-	const existingSources = meta.sources.filter((src) => fs.existsSync(src));
+	const existingSources = [];
+	for (const src of meta.sources) {
+		if (await pathExists(src)) existingSources.push(src);
+	}
 	if (existingSources.length === 0) {
 		log.warn(
 			`No NDI libraries found for ${targetPlatform}/${targetArch}; did the SDK extract for this platform?`,
@@ -301,30 +324,46 @@ function populatePackageLibs() {
 	for (const src of existingSources) {
 		shell.cp("-f", src, meta.pkgDir);
 	}
+	if (targetPlatform === "linux") {
+		const linkName = "libndi.so";
+		const targetName = "libndi.so.6";
+		const linkPath = path.join(meta.pkgDir, linkName);
+		const targetPath = path.join(meta.pkgDir, targetName);
+		if (!(await pathExists(targetPath))) {
+			log.warn(
+				`Skipping ${linkName} symlink; missing ${targetName} in ${meta.pkgDir}.`,
+			);
+		} else {
+			try {
+				let linkStat;
+				try {
+					linkStat = await fs.lstat(linkPath);
+				} catch (err) {
+					if (!(err && err.code === "ENOENT")) {
+						throw err;
+					}
+				}
+				if (linkStat?.isDirectory()) {
+					log.warn(`Skipping ${linkName} symlink; ${linkPath} is a directory.`);
+				} else {
+					if (linkStat) await fs.unlink(linkPath);
+					await fs.symlink(targetName, linkPath);
+					log.success(`Linked ${linkPath} -> ${targetName}.`);
+				}
+			} catch (err) {
+				const message =
+					err instanceof Error
+						? err.message
+						: err
+							? String(err)
+							: "Unknown error";
+				log.warn(`Failed to create ${linkName} symlink: ${message}`);
+			}
+		}
+	}
 	log.success(
 		`Populated ${meta.pkgDir} with ${existingSources.length} NDI file(s).`,
 	);
-}
-
-function copyVersionFile(rootDir) {
-	try {
-		const matches = shell
-			.find(rootDir)
-			.filter((filePath) => path.basename(filePath) === "Version.txt");
-		if (!matches || matches.length === 0) {
-			log.warn("NDI Version.txt not found in extracted distribution.");
-			return;
-		}
-		const targetDir = path.join("ndi");
-		shell.mkdir("-p", targetDir);
-		const target = path.join(targetDir, "Version.txt");
-		shell.cp("-f", matches[0], target);
-		log.info(`Stored NDI version file at ${target}`);
-	} catch (e) {
-		const message =
-			e instanceof Error ? e.message : e ? String(e) : "Unknown error";
-		log.warn(`Unable to copy NDI Version.txt: ${message}`);
-	}
 }
 
 async function buildAddon(packageDir) {
@@ -342,9 +381,9 @@ async function buildAddon(packageDir) {
 	shell.mkdir("-p", npmCacheDir);
 
 	await execa(
-		"npx",
+		process.execPath,
 		[
-			"node-gyp",
+			nodeGypBin,
 			"rebuild",
 			`--arch=${buildArch}`,
 			"--",
@@ -361,7 +400,7 @@ async function buildAddon(packageDir) {
 	);
 
 	const built = path.join("build", "Release", "grandi.node");
-	if (!fs.existsSync(built)) {
+	if (!(await pathExists(built))) {
 		throw new Error(`Built addon not found at ${built}`);
 	}
 	shell.cp("-f", built, productDir);
@@ -381,8 +420,8 @@ async function main() {
 		log.warn("Current platform is not supported; skipping NDI SDK setup.");
 		return;
 	}
-	if (ndiSubsetPresent()) {
-		if (!fs.existsSync(path.join("ndi", "Version.txt"))) {
+	if (await ndiSubsetPresent()) {
+		if (!(await pathExists(path.join("ndi", "Version.txt")))) {
 			log.warn("NDI version file missing; rerun the script to refresh.");
 		}
 		log.success("NDI SDK subset already present; skipping re-assembly.");
@@ -446,7 +485,6 @@ async function main() {
 				path.join(extractDir, "app/Bin/x64/Processing.NDI.Lib.Licenses.txt"),
 				"ndi/lib/libndi_licenses.txt",
 			);
-			copyVersionFile(extractDir);
 			log.step("Removing temporary files");
 			shell.rm("-f", innoZip);
 			shell.rm("-f", ndiExe);
@@ -493,7 +531,6 @@ async function main() {
 				path.join(workDir, "NDI SDK for Apple/NDI SDK License Agreement.pdf"),
 				"ndi/lib/LICENSE.pdf",
 			);
-			copyVersionFile(workDir);
 
 			log.step("Removing temporary files");
 			shell.rm("-f", pkgFile);
@@ -560,39 +597,13 @@ async function main() {
 				path.join(workDir, "NDI SDK for Linux/licenses/libndi_licenses.txt"),
 				"ndi/lib/",
 			);
-			copyVersionFile(workDir);
-			const linuxArchDirs = [
-				"ndi/lib/lnx-x86",
-				"ndi/lib/lnx-x64",
-				"ndi/lib/lnx-armv7l",
-				"ndi/lib/lnx-arm64",
-			];
-			for (const d of linuxArchDirs) {
-				try {
-					const files = await fs.promises.readdir(d);
-					const real = files.find((f) => /^libndi\.so\.\d+\.\d+/.test(f));
-					if (real) {
-						const realPath = path.join(d, real);
-						const so6 = path.join(d, "libndi.so.6");
-						if (fs.existsSync(so6)) {
-							await fs.promises.unlink(so6);
-							await fs.promises.copyFile(realPath, so6);
-							await fs.promises.unlink(realPath);
-						}
-					}
-				} catch (e) {
-					const message =
-						e instanceof Error ? e.message : e ? String(e) : "Unknown error";
-					log.error(`Failed to normalize Linux libraries in ${d}: ${message}`);
-				}
-			}
 			log.step("Removing temporary files");
 			shell.rm("-f", tarFile);
 			shell.rm("-rf", workDir);
 		}
 	}
 
-	populatePackageLibs();
+	await populatePackageLibs();
 
 	const meta = TARGETS[targetKey];
 	if (!meta) {
