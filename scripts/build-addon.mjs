@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -254,21 +255,13 @@ async function downloadToFile(url, options = {}) {
 		tracker.update(progress);
 	});
 
-	const fileHandle = await fs.open(filePath, "w");
-	const writeStream = fileHandle.createWriteStream({ autoClose: false });
 	try {
-		await pipeline(downloadStream, writeStream);
+		await pipeline(downloadStream, fsSync.createWriteStream(filePath));
 		tracker.finish();
 		return filePath;
 	} catch (error) {
 		tracker.fail(error);
 		throw error;
-	} finally {
-		try {
-			await fileHandle.close();
-		} catch {
-			// Ignore cleanup failures to preserve the original error.
-		}
 	}
 }
 
@@ -496,7 +489,6 @@ async function main() {
 			const pkgFile = await downloadToFile(pkgUrl, {
 				label: "NDI SDK distribution (macOS)",
 			});
-
 			log.step("Extracting NDI SDK distribution");
 			const workDir = tmp.tmpNameSync();
 			shell.rm("-rf", workDir);
