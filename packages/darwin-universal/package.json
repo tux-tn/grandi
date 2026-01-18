@@ -1,6 +1,6 @@
 {
 	"name": "@grandi/darwin-universal",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "Prebuilt grandi native addon for macOS universal (x64/arm64)",
 	"repository": {
 		"type": "git",

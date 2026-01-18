@@ -1,6 +1,6 @@
 {
 	"name": "@grandi/linux-arm64",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "Prebuilt grandi native addon for Linux arm64",
 	"repository": {
 		"type": "git",

@@ -1,6 +1,6 @@
 {
 	"name": "@grandi/linux-x64",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"description": "Prebuilt grandi native addon for Linux x64",
 	"repository": {
 		"type": "git",
