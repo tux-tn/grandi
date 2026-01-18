@@ -50,11 +50,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (build ia32)
+        if: ${{ matrix.arch == 'ia32' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          architecture: "x86"
+
+      - name: Setup Node.js (build)
+        if: ${{ matrix.arch != 'ia32' }}
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: npm install
@@ -81,6 +88,12 @@ jobs:
               npm install && \
               node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} \
             "
+
+      - name: Setup Node.js (publish)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Publish package
         run: npm publish ./${{ matrix.pkgDir }} --provenance --access public
