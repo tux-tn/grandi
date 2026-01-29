@@ -204,7 +204,7 @@ describe("src/index entrypoint", () => {
 		expect(addon.send).toHaveBeenLastCalledWith(sendOpts);
 
 		const receiveOpts = {
-			source: { name: "source", urlAddress: "udp://127.0.0.1" },
+			source: { name: "source", urlAddress: "127.0.0.1:25400" },
 			colorFormat: grandi.ColorFormat.Best,
 			bandwidth: grandi.Bandwidth.Highest,
 			allowVideoFields: true,
@@ -229,5 +229,17 @@ describe("src/index entrypoint", () => {
 		expect(addon.initialize).toHaveBeenCalled();
 		grandi.destroy();
 		expect(addon.destroy).toHaveBeenCalled();
+	});
+
+	it("throws when arch map lacks a package", async () => {
+		restorePlatform = mockProcessProperty("platform", "linux");
+		restoreArch = mockProcessProperty("arch", "mips" as typeof process.arch);
+		vi.doMock("node-gyp-build", () => ({
+			default: () => {
+				throw new Error("no local binding");
+			},
+		}));
+		const grandi = await import("../../src/index");
+		await expect(grandi.find()).rejects.toThrow("Unsupported platform or CPU");
 	});
 });
