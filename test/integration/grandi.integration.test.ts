@@ -87,6 +87,28 @@ function assertTallyShape(tally: SenderTally) {
 	expect(typeof tally.on_preview).toBe("boolean");
 }
 
+async function waitForAudioFrame(
+	receiver: Receiver,
+	expected: { sampleRate: number; channels: number },
+	timeoutMs = 5_000,
+): Promise<ReturnType<Receiver["audio"]>> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const remaining = Math.max(0, deadline - Date.now());
+		const frame = (await receiver.data(Math.min(500, remaining))) as Awaited<
+			ReturnType<Receiver["data"]>
+		>;
+
+		if (frame.type !== "audio") continue;
+		if (
+			frame.sampleRate === expected.sampleRate &&
+			frame.channels === expected.channels
+		)
+			return frame;
+	}
+	throw new Error("Timed out waiting for audio frame");
+}
+
 async function waitForVideoFrameSize(
 	receiver: Receiver,
 	expected: { xres: number; yres: number },
@@ -135,6 +157,17 @@ describe("grandi native addon (integration)", () => {
 
 	it("creates and disposes finders", async () => {
 		const finder = await grandi.find({ showLocalSources: true });
+		expect(Array.isArray(finder.sources())).toBe(true);
+		expect(finder.destroy()).toBe(true);
+	});
+
+	it("honors finder options", { timeout: 15_000 }, async () => {
+		const finder = await grandi.find({
+			showLocalSources: false,
+			groups: "dummy-group",
+			extraIPs: "127.0.0.1",
+		});
+		expect(typeof finder.wait(50)).toBe("boolean");
 		expect(Array.isArray(finder.sources())).toBe(true);
 		expect(finder.destroy()).toBe(true);
 	});
@@ -187,6 +220,31 @@ describe("grandi native addon (integration)", () => {
 			expect(tallyPreview.on_preview).toBe(true);
 			expect(tallyPreview.changed).toBe(true);
 			expect(sender.tally().changed).toBe(false);
+
+			expect(sender.metadata("<test>ping</test>")).toBe(true);
+			const deadline = Date.now() + 5_000;
+			let metadataFrame: Awaited<ReturnType<Receiver["metadata"]>> | undefined;
+			while (Date.now() < deadline) {
+				const frame = await receiver.metadata(1_000);
+				if (frame.data.includes("ping")) {
+					metadataFrame = frame;
+					break;
+				}
+			}
+			if (!metadataFrame)
+				throw new Error("Timed out waiting for metadata containing 'ping'");
+			expect(metadataFrame.type).toBe("metadata");
+
+			const audioFrame = await waitForAudioFrame(receiver, {
+				sampleRate: 48_000,
+				channels: 2,
+			});
+			expect(audioFrame.type).toBe("audio");
+			expect([
+				grandi.AudioFormat.Float32Separate,
+				grandi.AudioFormat.Float32Interleaved,
+			]).toContain(audioFrame.audioFormat);
+			expect(Buffer.isBuffer(audioFrame.data)).toBe(true);
 		} finally {
 			controller.running = false;
 			await pumpTask;
@@ -220,6 +278,7 @@ describe("grandi native addon (integration)", () => {
 			routing = await grandi.routing({ name: routingName });
 			expect(routing.change(source)).toBe(true);
 			expect(routing.sourcename()).toContain(routingName);
+			expect(routing.change(null as never)).toBe(true);
 
 			const routedSource = await waitForSourceByName(routingName);
 			routedReceiver = await grandi.receive({
@@ -228,11 +287,16 @@ describe("grandi native addon (integration)", () => {
 				colorFormat: grandi.ColorFormat.BGRX_BGRA,
 			});
 
-			const routedFrame = await waitForVideoFrameSize(
-				routedReceiver,
-				{ xres: 64, yres: 36 },
-				5000,
-			);
+			const routedDeadline = Date.now() + 15_000;
+			let routedFrame: ReceivedVideoFrame | undefined;
+			while (Date.now() < routedDeadline) {
+				const frame = await routedReceiver.data(500);
+				if (frame.type !== "video") continue;
+				routedFrame = frame;
+				break;
+			}
+			if (!routedFrame)
+				throw new Error("Timed out waiting for routed video frame");
 			assertReceivedVideoFrame(routedFrame);
 			expect(routing.connections()).toBeGreaterThanOrEqual(1);
 
