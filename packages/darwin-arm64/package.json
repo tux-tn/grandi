@@ -1,0 +1,25 @@
+{
+	"name": "@grandi/darwin-arm64",
+	"version": "1.2.1",
+	"description": "Prebuilt grandi native addon for macOS arm64",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/tux-tn/grandi.git"
+	},
+	"license": "Apache-2.0",
+	"os": [
+		"darwin"
+	],
+	"cpu": [
+		"x64",
+		"arm64"
+	],
+	"main": "grandi.node",
+	"files": [
+		"grandi.node",
+		"libndi.*",
+		"LICENSE",
+		"libndi_licenses.txt",
+		"README.md"
+	]
+}

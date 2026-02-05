@@ -44,7 +44,11 @@ jobs:
           - os: macos-latest
             platform: darwin
             arch: x64
-            pkgDir: packages/darwin-universal
+            pkgDir: packages/darwin-x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            pkgDir: packages/darwin-arm64
 
     steps:
       - name: Checkout

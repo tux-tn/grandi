@@ -1,7 +1,7 @@
 {
-	"name": "@grandi/darwin-universal",
+	"name": "@grandi/darwin-x64",
 	"version": "1.2.1",
-	"description": "Prebuilt grandi native addon for macOS universal (x64/arm64)",
+	"description": "Prebuilt grandi native addon for macOS x64",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/tux-tn/grandi.git"

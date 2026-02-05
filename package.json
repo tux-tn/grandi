@@ -33,7 +33,8 @@
 		"url": "https://github.com/tux-tn/grandi/issues"
 	},
 	"optionalDependencies": {
-		"@grandi/darwin-universal": "1.2.1",
+		"@grandi/darwin-x64": "1.2.1",
+		"@grandi/darwin-arm64": "1.2.1",
 		"@grandi/linux-arm64": "1.2.1",
 		"@grandi/linux-armv7l": "1.2.1",
 		"@grandi/linux-x64": "1.2.1",

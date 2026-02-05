@@ -40,8 +40,8 @@ function tryRequireArchPackage(): GrandiAddon | null {
 		"linux-arm": "@grandi/linux-armv7l",
 		"win32-x64": "@grandi/win32-x64",
 		"win32-ia32": "@grandi/win32-ia32",
-		"darwin-x64": "@grandi/darwin-universal",
-		"darwin-arm64": "@grandi/darwin-universal",
+		"darwin-x64": "@grandi/darwin-x64",
+		"darwin-arm64": "@grandi/darwin-arm64",
 	};
 	const pkg = map[archKey];
 	if (!pkg) throw new Error(`Unsupported platform or architecture: ${archKey}`);
@@ -63,6 +63,7 @@ function loadAddon(): GrandiAddon {
 		);
 		return noopAddon;
 	}
+
 	try {
 		const localBinding = nodeGypBuild(
 			path.join(__dirname, ".."),
@@ -71,6 +72,7 @@ function loadAddon(): GrandiAddon {
 	} catch (err) {
 		loadErrors.push(err as Error);
 	}
+
 	try {
 		const archAddon = tryRequireArchPackage();
 		if (archAddon) return archAddon;

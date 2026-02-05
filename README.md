@@ -38,7 +38,7 @@ Grandi publishes per-architecture packages (`@grandi/<os>-<arch>`) that bundle t
 | Operating system | Architectures | Status | Notes |
 | --- | --- | --- | --- |
 | Windows | x86, x64 | ✅ Published as `@grandi/win32-ia32` and `@grandi/win32-x64`. Visual Studio 2013 C runtime only needed when building locally. |
-| macOS | Universal (x64 + arm64) | ✅ Published as `@grandi/darwin-universal`, built against the official universal NDI™ runtime. |
+| macOS | Universal (x64 + arm64) | ✅ Published as `@grandi/darwin-x64`, `@grandi/darwin-arm64`, built against the official universal NDI™ runtime. |
 | Linux | x86, x64, armv7l, arm64 | ✅ Published as `@grandi/linux-x64`, `@grandi/linux-arm64`, `@grandi/linux-armv7l`. Built against the glibc-based NDI™ SDK; requires `libavahi-common.so.3`, `libavahi-client.so.3`, and the `avahi-daemon` service. |
 
 ## Installation
