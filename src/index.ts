@@ -63,18 +63,19 @@ function loadAddon(): GrandiAddon {
 		);
 		return noopAddon;
 	}
-	try {
-		const archAddon = tryRequireArchPackage();
-		if (archAddon) return archAddon;
-	} catch (err) {
-		loadErrors.push(err as Error);
-	}
 
 	try {
 		const localBinding = nodeGypBuild(
 			path.join(__dirname, ".."),
 		) as GrandiAddon;
 		if (localBinding) return localBinding;
+	} catch (err) {
+		loadErrors.push(err as Error);
+	}
+
+	try {
+		const archAddon = tryRequireArchPackage();
+		if (archAddon) return archAddon;
 	} catch (err) {
 		loadErrors.push(err as Error);
 	}
