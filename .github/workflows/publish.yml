@@ -30,6 +30,5 @@ jobs:
       - name: bundle typescript sources
         run: npm run build
 
-      - if: github.event_name != 'workflow_dispatch'
-        name: Publish package
+      - name: Publish package
         run: npm publish --provenance  --access public
