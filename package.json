@@ -33,13 +33,13 @@
 		"url": "https://github.com/tux-tn/grandi/issues"
 	},
 	"optionalDependencies": {
-		"@grandi/darwin-x64": "1.2.1",
-		"@grandi/darwin-arm64": "1.2.1",
-		"@grandi/linux-arm64": "1.2.1",
-		"@grandi/linux-armv7l": "1.2.1",
-		"@grandi/linux-x64": "1.2.1",
-		"@grandi/win32-ia32": "1.2.1",
-		"@grandi/win32-x64": "1.2.1"
+		"@grandi/darwin-x64": "1.3.0",
+		"@grandi/darwin-arm64": "1.3.0",
+		"@grandi/linux-arm64": "1.3.0",
+		"@grandi/linux-armv7l": "1.3.0",
+		"@grandi/linux-x64": "1.3.0",
+		"@grandi/win32-ia32": "1.3.0",
+		"@grandi/win32-x64": "1.3.0"
 	},
 	"dependencies": {
 		"node-gyp-build": "^4.8.4"
