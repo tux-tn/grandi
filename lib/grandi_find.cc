@@ -255,6 +255,9 @@ napi_value find_destroy(napi_env env, napi_callback_info info) {
         NDIlib_find_destroy(find);
       embeddedData->value = nullptr;
     }
+    napi_value value;
+    if (napi_create_int32(env, 0, &value) == napi_ok)
+      napi_set_named_property(env, thisValue, "embedded", value);
     success = true;
   }
 
@@ -284,6 +287,8 @@ napi_value find_sources(napi_env env, napi_callback_info info) {
   status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
   CHECK_STATUS;
   NDIlib_find_instance_t find = (NDIlib_find_instance_t)(embeddedData->value);
+  if (find == nullptr)
+    NAPI_THROW_ERROR("Finder has been destroyed.");
 
   /*  call NDI API functionality  */
   uint32_t no_sources;
@@ -340,15 +345,17 @@ napi_value find_wait(napi_env env, napi_callback_info info) {
   status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
   CHECK_STATUS;
   NDIlib_find_instance_t find = (NDIlib_find_instance_t)(embeddedData->value);
+  if (find == nullptr)
+    NAPI_THROW_ERROR("Finder has been destroyed.");
 
   /*  handle optional "wait" argument  */
   uint32_t wait = 10000;
-  if (argc == 2) {
+  if (argc >= 1) {
     napi_valuetype type;
-    status = napi_typeof(env, args[1], &type);
+    status = napi_typeof(env, args[0], &type);
     CHECK_STATUS;
     if (type == napi_number) {
-      status = napi_get_value_uint32(env, args[1], &wait);
+      status = napi_get_value_uint32(env, args[0], &wait);
       CHECK_STATUS;
     }
   }
