@@ -32,6 +32,42 @@
 #include "grandi_find.h"
 
 namespace {
+void destroyRecvInstance(void *value) {
+  NDIlib_recv_destroy((NDIlib_recv_instance_t)value);
+}
+
+bool acquireRecvFromThis(napi_env env, napi_value thisValue,
+                         nativeHandle **handle, NDIlib_recv_instance_t *recv,
+                         carrier *c) {
+  napi_value recvValue;
+  c->status = napi_get_named_property(env, thisValue, "embedded", &recvValue);
+  if (c->status != napi_ok)
+    return false;
+  napi_valuetype type;
+  c->status = napi_typeof(env, recvValue, &type);
+  if (c->status != napi_ok)
+    return false;
+  if (type != napi_external) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "Receiver is not initialized.";
+    return false;
+  }
+  void *externalData;
+  c->status = napi_get_value_external(env, recvValue, &externalData);
+  if (c->status != napi_ok)
+    return false;
+  nativeHandle *native = (nativeHandle *)externalData;
+  void *value;
+  if (!acquireNativeHandle(native, &value)) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "Receiver has been destroyed.";
+    return false;
+  }
+  *handle = native;
+  *recv = (NDIlib_recv_instance_t)value;
+  return true;
+}
+
 uint32_t remainingWaitMs(uint32_t initialWait,
                          const std::chrono::steady_clock::time_point &start) {
   if (initialWait == 0)
@@ -102,26 +138,7 @@ bool captureUntilFrame(dataCarrier *c, NDIlib_frame_type_e desired,
 } // namespace
 
 void finalizeReceive(napi_env env, void *data, void *hint) {
-  if (hint == nullptr) {
-    NDIlib_recv_destroy((NDIlib_recv_instance_t)data);
-    return;
-  }
-
-  napi_value obj = (napi_value)hint;
-  napi_value recvValue;
-  if (napi_get_named_property(env, obj, "embedded", &recvValue) != napi_ok)
-    return;
-
-  napi_valuetype result;
-  if (napi_typeof(env, recvValue, &result) != napi_ok)
-    return;
-  if (result != napi_external)
-    return;
-
-  void *recvData;
-  if (napi_get_value_external(env, recvValue, &recvData) != napi_ok)
-    return;
-  NDIlib_recv_destroy((NDIlib_recv_instance_t)recvData);
+  finalizeNativeHandle(env, data, hint);
 }
 
 napi_value destroyReceive(napi_env env, napi_callback_info info) {
@@ -142,14 +159,13 @@ napi_value destroyReceive(napi_env env, napi_callback_info info) {
     goto done;
 
   if (type == napi_external) {
-    void *recvData;
-    if (napi_get_value_external(env, recvValue, &recvData) != napi_ok)
+    void *externalData;
+    if (napi_get_value_external(env, recvValue, &externalData) != napi_ok)
       goto done;
-    NDIlib_recv_destroy((NDIlib_recv_instance_t)recvData);
+    success = closeNativeHandle((nativeHandle *)externalData);
     napi_value value;
     if (napi_create_int32(env, 0, &value) == napi_ok)
       napi_set_named_property(env, thisValue, "embedded", value);
-    success = true;
   }
 
 done:
@@ -194,8 +210,9 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
 
   napi_value embedded;
+  nativeHandle *handle = createNativeHandle(c->recv, destroyRecvInstance);
   c->status =
-      napi_create_external(env, c->recv, finalizeReceive, result, &embedded);
+      napi_create_external(env, handle, finalizeReceive, nullptr, &embedded);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
@@ -470,6 +487,11 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   }
   REJECT_STATUS;
 
+  struct Guard {
+    dataCarrier *c;
+    ~Guard() { NDIlib_recv_free_video_v2(c->recv, &c->videoFrame); }
+  } guard{c};
+
   napi_value result;
   c->status = napi_create_object(env, &result);
   REJECT_STATUS;
@@ -576,8 +598,6 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
 
-  NDIlib_recv_free_video_v2(c->recv, &c->videoFrame);
-
   napi_status status;
   status = napi_resolve_deferred(env, c->_deferred, result);
   FLOATING_STATUS;
@@ -597,14 +617,6 @@ napi_value setReceiveTally(napi_env env, napi_callback_info info) {
   if (argc != 1)
     NAPI_THROW_ERROR(
         "Receiver tally must be called with a single options object.");
-
-  napi_value embedded;
-  status = napi_get_named_property(env, thisValue, "embedded", &embedded);
-  CHECK_STATUS;
-  void *recvData;
-  status = napi_get_value_external(env, embedded, &recvData);
-  CHECK_STATUS;
-  NDIlib_recv_instance_t recv = (NDIlib_recv_instance_t)recvData;
 
   napi_valuetype type;
   status = napi_typeof(env, args[0], &type);
@@ -644,7 +656,21 @@ napi_value setReceiveTally(napi_env env, napi_callback_info info) {
   NDIlib_tally_t tally;
   tally.on_program = onProgram;
   tally.on_preview = onPreview;
+
+  napi_value embedded;
+  status = napi_get_named_property(env, thisValue, "embedded", &embedded);
+  CHECK_STATUS;
+  void *recvData;
+  status = napi_get_value_external(env, embedded, &recvData);
+  CHECK_STATUS;
+  nativeHandle *handle = (nativeHandle *)recvData;
+  void *recvInstance;
+  if (!acquireNativeHandle(handle, &recvInstance))
+    NAPI_THROW_ERROR("Receiver has been destroyed.");
+  NDIlib_recv_instance_t recv = (NDIlib_recv_instance_t)recvInstance;
+
   NDIlib_recv_set_tally(recv, &tally);
+  releaseNativeHandle(handle);
 
   napi_value result;
   status = napi_get_boolean(env, true, &result);
@@ -666,13 +692,8 @@ napi_value videoReceive(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value recvValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &recvValue);
-  REJECT_RETURN;
-  void *recvData;
-  c->status = napi_get_value_external(env, recvValue, &recvData);
-  c->recv = (NDIlib_recv_instance_t)recvData;
-  REJECT_RETURN;
+  if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     c->status = napi_typeof(env, args[0], &type);
@@ -736,6 +757,11 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
     c->errorMsg = "Async audio frame receive failed to complete.";
   }
   REJECT_STATUS;
+
+  struct Guard {
+    dataCarrier *c;
+    ~Guard() { NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame); }
+  } guard{c};
 
   napi_value result;
   c->status = napi_create_object(env, &result);
@@ -847,8 +873,6 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
 
-  NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
-
   napi_status status;
   status = napi_resolve_deferred(env, c->_deferred, result);
   FLOATING_STATUS;
@@ -873,13 +897,8 @@ napi_value dataAndAudioReceive(napi_env env, napi_callback_info info,
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value recvValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &recvValue);
-  REJECT_RETURN;
-  void *recvData;
-  c->status = napi_get_value_external(env, recvValue, &recvData);
-  c->recv = (NDIlib_recv_instance_t)recvData;
-  REJECT_RETURN;
+  if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     napi_value configValue = args[0];
@@ -985,6 +1004,11 @@ void metadataReceiveComplete(napi_env env, napi_status asyncStatus,
   }
   REJECT_STATUS;
 
+  struct Guard {
+    dataCarrier *c;
+    ~Guard() { NDIlib_recv_free_metadata(c->recv, &c->metadataFrame); }
+  } guard{c};
+
   napi_value result;
   c->status = napi_create_object(env, &result);
   REJECT_STATUS;
@@ -1034,8 +1058,6 @@ void metadataReceiveComplete(napi_env env, napi_status asyncStatus,
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
 
-  NDIlib_recv_free_metadata(c->recv, &c->metadataFrame);
-
   napi_status status;
   status = napi_resolve_deferred(env, c->_deferred, result);
   FLOATING_STATUS;
@@ -1057,13 +1079,8 @@ napi_value metadataReceive(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value recvValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &recvValue);
-  REJECT_RETURN;
-  void *recvData;
-  c->status = napi_get_value_external(env, recvValue, &recvData);
-  c->recv = (NDIlib_recv_instance_t)recvData;
-  REJECT_RETURN;
+  if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     c->status = napi_typeof(env, args[0], &type);

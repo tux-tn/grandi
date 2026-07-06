@@ -44,6 +44,7 @@ struct receiveCarrier : carrier {
 };
 
 struct dataCarrier : carrier {
+  nativeHandle *handle = nullptr;
   uint32_t wait = 10000;
   NDIlib_recv_instance_t recv;
   NDIlib_frame_type_e frameType;
@@ -55,6 +56,8 @@ struct dataCarrier : carrier {
   Grandi_audio_format_e audioFormat = Grandi_audio_format_float_32_separate;
   NDIlib_metadata_frame_t metadataFrame;
   ~dataCarrier() {
+    if (handle != nullptr)
+      releaseNativeHandle(handle);
     delete[] audioFrame16s.p_data;
     delete[] audioFrame32fIlvd.p_data;
   }
