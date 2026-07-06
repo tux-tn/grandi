@@ -35,11 +35,16 @@ struct sendCarrier : carrier {
 };
 
 struct sendDataCarrier : carrier {
+  nativeHandle *handle = nullptr;
   NDIlib_send_instance_t send;
   NDIlib_video_frame_v2_t videoFrame;
   NDIlib_audio_frame_v3_t audioFrame;
   NDIlib_metadata_frame_t metadataFrame;
   std::string frameMetadata;
+  ~sendDataCarrier() {
+    if (handle != nullptr)
+      releaseNativeHandle(handle);
+  }
 };
 
 #endif /* GRANDI_SEND_H */
