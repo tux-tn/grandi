@@ -14,6 +14,7 @@
 */
 
 #include <cstddef>
+#include <mutex>
 
 #include <Processing.NDI.Lib.h>
 #include <Processing.NDI.FrameSync.h>
@@ -23,13 +24,24 @@
 
 namespace {
 struct framesyncWrapper {
+  napi_env env = nullptr;
   NDIlib_framesync_instance_t fs = nullptr;
   napi_ref receiverRef = nullptr;
+  nativeHandle *recvHandle = nullptr;
+  bool closing = false;
+  bool finalized = false;
+  uint32_t active = 0;
+  std::mutex mutex;
 };
 
 struct framesyncCarrier : carrier {
+  nativeHandle *recvHandle = nullptr;
   NDIlib_recv_instance_t recv = nullptr;
   NDIlib_framesync_instance_t fs = nullptr;
+  ~framesyncCarrier() {
+    if (recvHandle != nullptr)
+      releaseNativeHandle(recvHandle);
+  }
 };
 
 struct framesyncVideoCarrier : carrier {
@@ -37,6 +49,7 @@ struct framesyncVideoCarrier : carrier {
   NDIlib_video_frame_v2_t videoFrame{};
   NDIlib_frame_format_type_e fieldType = NDIlib_frame_format_type_progressive;
   bool noVideo = false;
+  ~framesyncVideoCarrier();
 };
 
 struct framesyncAudioCarrier : carrier {
@@ -45,36 +58,137 @@ struct framesyncAudioCarrier : carrier {
   int sampleRate = 0;
   int noChannels = 0;
   int noSamples = 0;
+  ~framesyncAudioCarrier();
 };
 
-void finalizeFrameSync(napi_env env, void *data, void *hint) {
-  napi_value obj = (napi_value)hint;
+void closeFrameSyncWrapper(napi_env env, framesyncWrapper *wrapper) {
+  if (wrapper == nullptr)
+    return;
+  NDIlib_framesync_instance_t fsToDestroy = nullptr;
+  napi_ref receiverRefToDelete = nullptr;
+  nativeHandle *recvHandleToRelease = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(wrapper->mutex);
+    wrapper->closing = true;
+    if (wrapper->active == 0) {
+      fsToDestroy = wrapper->fs;
+      receiverRefToDelete = wrapper->receiverRef;
+      recvHandleToRelease = wrapper->recvHandle;
+      wrapper->fs = nullptr;
+      wrapper->receiverRef = nullptr;
+      wrapper->recvHandle = nullptr;
+    }
+  }
+  if (fsToDestroy != nullptr)
+    NDIlib_framesync_destroy(fsToDestroy);
+  if (receiverRefToDelete != nullptr)
+    napi_delete_reference(env, receiverRefToDelete);
+  if (recvHandleToRelease != nullptr)
+    releaseNativeHandle(recvHandleToRelease);
+}
 
+bool acquireFrameSyncFromThis(napi_env env, napi_value thisValue,
+                              framesyncWrapper **wrapper, carrier *c) {
   napi_value fsValue;
-  if (napi_get_named_property(env, obj, "embedded", &fsValue) != napi_ok)
-    return;
-
+  c->status = napi_get_named_property(env, thisValue, "embedded", &fsValue);
+  if (c->status != napi_ok)
+    return false;
   napi_valuetype type;
-  if (napi_typeof(env, fsValue, &type) != napi_ok)
-    return;
-  if (type != napi_external)
-    return;
-
+  c->status = napi_typeof(env, fsValue, &type);
+  if (c->status != napi_ok)
+    return false;
+  if (type != napi_external) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "FrameSync is not initialized.";
+    return false;
+  }
   void *externalData;
-  if (napi_get_value_external(env, fsValue, &externalData) != napi_ok)
+  c->status = napi_get_value_external(env, fsValue, &externalData);
+  if (c->status != napi_ok)
+    return false;
+  framesyncWrapper *native = (framesyncWrapper *)externalData;
+  {
+    std::lock_guard<std::mutex> lock(native->mutex);
+    if (native->closing || native->fs == nullptr) {
+      c->status = GRANDI_INVALID_ARGS;
+      c->errorMsg = "FrameSync has been destroyed.";
+      return false;
+    }
+    native->active++;
+  }
+  *wrapper = native;
+  return true;
+}
+
+void releaseFrameSyncWrapper(framesyncWrapper *wrapper) {
+  if (wrapper == nullptr)
     return;
-  framesyncWrapper *wrapper = (framesyncWrapper *)externalData;
-
-  if (wrapper->fs != nullptr) {
-    NDIlib_framesync_destroy(wrapper->fs);
-    wrapper->fs = nullptr;
+  NDIlib_framesync_instance_t fsToDestroy = nullptr;
+  napi_ref receiverRefToDelete = nullptr;
+  nativeHandle *recvHandleToRelease = nullptr;
+  bool deleteWrapper = false;
+  {
+    std::lock_guard<std::mutex> lock(wrapper->mutex);
+    if (wrapper->active > 0)
+      wrapper->active--;
+    if (wrapper->closing && wrapper->active == 0 && wrapper->fs != nullptr) {
+      fsToDestroy = wrapper->fs;
+      receiverRefToDelete = wrapper->receiverRef;
+      recvHandleToRelease = wrapper->recvHandle;
+      wrapper->fs = nullptr;
+      wrapper->receiverRef = nullptr;
+      wrapper->recvHandle = nullptr;
+    }
+    deleteWrapper = wrapper->finalized && wrapper->active == 0;
   }
-  if (wrapper->receiverRef != nullptr) {
-    napi_delete_reference(env, wrapper->receiverRef);
-    wrapper->receiverRef = nullptr;
-  }
+  if (fsToDestroy != nullptr)
+    NDIlib_framesync_destroy(fsToDestroy);
+  if (receiverRefToDelete != nullptr)
+    napi_delete_reference(wrapper->env, receiverRefToDelete);
+  if (recvHandleToRelease != nullptr)
+    releaseNativeHandle(recvHandleToRelease);
+  if (deleteWrapper)
+    delete wrapper;
+}
 
-  delete wrapper;
+framesyncVideoCarrier::~framesyncVideoCarrier() {
+  if (wrapper != nullptr)
+    releaseFrameSyncWrapper(wrapper);
+}
+
+framesyncAudioCarrier::~framesyncAudioCarrier() {
+  if (wrapper != nullptr)
+    releaseFrameSyncWrapper(wrapper);
+}
+
+void finalizeFrameSync(napi_env env, void *data, void *hint) {
+  framesyncWrapper *wrapper = (framesyncWrapper *)data;
+  NDIlib_framesync_instance_t fsToDestroy = nullptr;
+  napi_ref receiverRefToDelete = nullptr;
+  nativeHandle *recvHandleToRelease = nullptr;
+  bool deleteWrapper = false;
+  {
+    std::lock_guard<std::mutex> lock(wrapper->mutex);
+    wrapper->finalized = true;
+    wrapper->closing = true;
+    if (wrapper->active == 0) {
+      fsToDestroy = wrapper->fs;
+      receiverRefToDelete = wrapper->receiverRef;
+      recvHandleToRelease = wrapper->recvHandle;
+      wrapper->fs = nullptr;
+      wrapper->receiverRef = nullptr;
+      wrapper->recvHandle = nullptr;
+      deleteWrapper = true;
+    }
+  }
+  if (fsToDestroy != nullptr)
+    NDIlib_framesync_destroy(fsToDestroy);
+  if (receiverRefToDelete != nullptr)
+    napi_delete_reference(env, receiverRefToDelete);
+  if (recvHandleToRelease != nullptr)
+    releaseNativeHandle(recvHandleToRelease);
+  if (deleteWrapper)
+    delete wrapper;
 }
 
 napi_value destroyFrameSync(napi_env env, napi_callback_info info) {
@@ -99,16 +213,7 @@ napi_value destroyFrameSync(napi_env env, napi_callback_info info) {
       goto done;
     framesyncWrapper *wrapper = (framesyncWrapper *)externalData;
 
-    if (wrapper->fs != nullptr) {
-      NDIlib_framesync_destroy(wrapper->fs);
-      wrapper->fs = nullptr;
-    }
-    if (wrapper->receiverRef != nullptr) {
-      napi_delete_reference(env, wrapper->receiverRef);
-      wrapper->receiverRef = nullptr;
-    }
-
-    delete wrapper;
+    closeFrameSyncWrapper(env, wrapper);
 
     napi_value value;
     if (napi_create_int32(env, 0, &value) == napi_ok)
@@ -180,13 +285,16 @@ void framesyncComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
 
   framesyncWrapper *wrapper = new framesyncWrapper;
+  wrapper->env = env;
   wrapper->fs = c->fs;
   wrapper->receiverRef = c->passthru;
+  wrapper->recvHandle = c->recvHandle;
   c->passthru = nullptr;
+  c->recvHandle = nullptr;
 
   napi_value embedded;
   c->status =
-      napi_create_external(env, wrapper, finalizeFrameSync, result, &embedded);
+      napi_create_external(env, wrapper, finalizeFrameSync, nullptr, &embedded);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
@@ -390,18 +498,8 @@ napi_value framesyncVideo(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value fsValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &fsValue);
-  REJECT_RETURN;
-  c->status = napi_typeof(env, fsValue, &type);
-  REJECT_RETURN;
-  if (type != napi_external)
-    REJECT_ERROR_RETURN("FrameSync is not initialized.", GRANDI_INVALID_ARGS);
-
-  void *externalData;
-  c->status = napi_get_value_external(env, fsValue, &externalData);
-  REJECT_RETURN;
-  c->wrapper = (framesyncWrapper *)externalData;
+  if (!acquireFrameSyncFromThis(env, thisValue, &c->wrapper, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     napi_value fieldType = args[0];
@@ -565,18 +663,8 @@ napi_value framesyncAudio(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value fsValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &fsValue);
-  REJECT_RETURN;
-  c->status = napi_typeof(env, fsValue, &type);
-  REJECT_RETURN;
-  if (type != napi_external)
-    REJECT_ERROR_RETURN("FrameSync is not initialized.", GRANDI_INVALID_ARGS);
-
-  void *externalData;
-  c->status = napi_get_value_external(env, fsValue, &externalData);
-  REJECT_RETURN;
-  c->wrapper = (framesyncWrapper *)externalData;
+  if (!acquireFrameSyncFromThis(env, thisValue, &c->wrapper, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     napi_value options = args[0];
@@ -675,9 +763,14 @@ napi_value framesync(napi_env env, napi_callback_info info) {
   if (type != napi_external)
     REJECT_ERROR_RETURN("Receiver is not initialized.", GRANDI_INVALID_ARGS);
 
-  void *recvData;
-  c->status = napi_get_value_external(env, recvValue, &recvData);
+  void *externalData;
+  c->status = napi_get_value_external(env, recvValue, &externalData);
   REJECT_RETURN;
+  nativeHandle *recvHandle = (nativeHandle *)externalData;
+  void *recvData;
+  if (!acquireNativeHandle(recvHandle, &recvData))
+    REJECT_ERROR_RETURN("Receiver has been destroyed.", GRANDI_INVALID_ARGS);
+  c->recvHandle = recvHandle;
   c->recv = (NDIlib_recv_instance_t)recvData;
 
   napi_ref receiverRef;
