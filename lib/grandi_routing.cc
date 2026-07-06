@@ -273,6 +273,9 @@ napi_value routing_destroy(napi_env env, napi_callback_info info) {
         NDIlib_routing_destroy(routing);
       embeddedData->value = nullptr;
     }
+    napi_value value;
+    if (napi_create_int32(env, 0, &value) == napi_ok)
+      napi_set_named_property(env, thisValue, "embedded", value);
     success = true;
   }
 
