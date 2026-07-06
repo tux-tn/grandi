@@ -2,7 +2,7 @@
 
 # Grandi
 
-Grandi is a TypeScript-first native Node.js binding for NewTek NDI™  6. It exposes the full NDI 6 SDK surface area through a Promise-based API, providing strongly typed helpers for sending and receiving professional video, audio, metadata, and tally data from Node.js applications. For more information on NDI™ , see <https://www.ndi.tv/>.
+Grandi is a TypeScript-first native Node.js binding for NDI™ 6. It exposes broad NDI 6 SDK coverage through a Promise-based API, providing strongly typed helpers for sending and receiving professional video, audio, metadata, and tally data from Node.js applications. For more information on NDI™ , see <https://www.ndi.tv/>.
 
 ## Why this fork?
 Grandi is a maintained fork of [Streampunk Grandiose](https://github.com/Streampunk/grandiose). The original `steampunk/grandiose` repository and the corresponding `grandiose` package on npm have not been updated since 2023, and major functionality such as data sending never landed upstream. This fork modernizes the build, rewrites the bindings in TypeScript, and delivers the outstanding features required for production projects while keeping a familiar API. Meaningful contributions were also carried forward from community forks:
