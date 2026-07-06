@@ -17,6 +17,7 @@
 #define GRANDI_UTIL_H
 
 #include <chrono>
+#include <mutex>
 #include <stdio.h>
 #include <string>
 #include <Processing.NDI.Lib.h>
@@ -87,6 +88,21 @@ struct carrier {
   napi_deferred _deferred;
   napi_async_work _request = nullptr;
 };
+
+struct nativeHandle {
+  void *value = nullptr;
+  void (*destroy)(void *) = nullptr;
+  bool closing = false;
+  bool finalized = false;
+  uint32_t active = 0;
+  std::mutex mutex;
+};
+
+nativeHandle *createNativeHandle(void *value, void (*destroy)(void *));
+bool acquireNativeHandle(nativeHandle *handle, void **value);
+void releaseNativeHandle(nativeHandle *handle);
+bool closeNativeHandle(nativeHandle *handle);
+void finalizeNativeHandle(napi_env env, void *data, void *hint);
 
 void tidyCarrier(napi_env env, carrier *c);
 int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line);

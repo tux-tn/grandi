@@ -20,6 +20,7 @@
 #include <string>
 #include <algorithm>
 #include <cstdlib>
+#include <mutex>
 #include <Processing.NDI.Lib.h>
 #include "grandi_util.h"
 #include "node_api.h"
@@ -171,7 +172,92 @@ void tidyCarrier(napi_env env, carrier *c) {
   delete c;
 }
 
+nativeHandle *createNativeHandle(void *value, void (*destroy)(void *)) {
+  nativeHandle *handle = new nativeHandle;
+  handle->value = value;
+  handle->destroy = destroy;
+  return handle;
+}
+
+bool acquireNativeHandle(nativeHandle *handle, void **value) {
+  if (handle == nullptr)
+    return false;
+  std::lock_guard<std::mutex> lock(handle->mutex);
+  if (handle->closing || handle->value == nullptr)
+    return false;
+  handle->active++;
+  *value = handle->value;
+  return true;
+}
+
+void releaseNativeHandle(nativeHandle *handle) {
+  if (handle == nullptr)
+    return;
+  void *valueToDestroy = nullptr;
+  void (*destroy)(void *) = nullptr;
+  bool deleteHandle = false;
+  {
+    std::lock_guard<std::mutex> lock(handle->mutex);
+    if (handle->active > 0)
+      handle->active--;
+    if (handle->closing && handle->active == 0 && handle->value != nullptr) {
+      valueToDestroy = handle->value;
+      destroy = handle->destroy;
+      handle->value = nullptr;
+    }
+    deleteHandle = handle->finalized && handle->active == 0;
+  }
+  if (destroy != nullptr && valueToDestroy != nullptr)
+    destroy(valueToDestroy);
+  if (deleteHandle)
+    delete handle;
+}
+
+bool closeNativeHandle(nativeHandle *handle) {
+  if (handle == nullptr)
+    return false;
+  void *valueToDestroy = nullptr;
+  void (*destroy)(void *) = nullptr;
+  bool hadValue = false;
+  {
+    std::lock_guard<std::mutex> lock(handle->mutex);
+    hadValue = handle->value != nullptr;
+    handle->closing = true;
+    if (handle->active == 0 && handle->value != nullptr) {
+      valueToDestroy = handle->value;
+      destroy = handle->destroy;
+      handle->value = nullptr;
+    }
+  }
+  if (destroy != nullptr && valueToDestroy != nullptr)
+    destroy(valueToDestroy);
+  return hadValue;
+}
+
+void finalizeNativeHandle(napi_env env, void *data, void *hint) {
+  nativeHandle *handle = (nativeHandle *)data;
+  void *valueToDestroy = nullptr;
+  void (*destroy)(void *) = nullptr;
+  bool deleteHandle = false;
+  {
+    std::lock_guard<std::mutex> lock(handle->mutex);
+    handle->finalized = true;
+    handle->closing = true;
+    if (handle->active == 0 && handle->value != nullptr) {
+      valueToDestroy = handle->value;
+      destroy = handle->destroy;
+      handle->value = nullptr;
+    }
+    deleteHandle = handle->active == 0;
+  }
+  if (destroy != nullptr && valueToDestroy != nullptr)
+    destroy(valueToDestroy);
+  if (deleteHandle)
+    delete handle;
+}
+
 int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line) {
+  int32_t statusCode = c->status;
   if (c->status != GRANDI_SUCCESS) {
     napi_value errorValue, errorCode, errorMsg;
     napi_status status;
@@ -199,7 +285,7 @@ int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line) {
     free(extMsg);
     tidyCarrier(env, c);
   }
-  return c->status;
+  return statusCode;
 }
 
 bool validColorFormat(NDIlib_recv_color_format_e format) {
