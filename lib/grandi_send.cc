@@ -37,6 +37,42 @@ napi_value tally(napi_env env, napi_callback_info info);
 napi_value sourcename(napi_env env, napi_callback_info info);
 
 namespace {
+void destroySendInstance(void *value) {
+  NDIlib_send_destroy((NDIlib_send_instance_t)value);
+}
+
+bool acquireSendFromThis(napi_env env, napi_value thisValue,
+                         nativeHandle **handle, NDIlib_send_instance_t *send,
+                         carrier *c) {
+  napi_value sendValue;
+  c->status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
+  if (c->status != napi_ok)
+    return false;
+  napi_valuetype type;
+  c->status = napi_typeof(env, sendValue, &type);
+  if (c->status != napi_ok)
+    return false;
+  if (type != napi_external) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "Sender is not initialized.";
+    return false;
+  }
+  void *externalData;
+  c->status = napi_get_value_external(env, sendValue, &externalData);
+  if (c->status != napi_ok)
+    return false;
+  nativeHandle *native = (nativeHandle *)externalData;
+  void *value;
+  if (!acquireNativeHandle(native, &value)) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "Sender has been destroyed.";
+    return false;
+  }
+  *handle = native;
+  *send = (NDIlib_send_instance_t)value;
+  return true;
+}
+
 bool getInt64FromValue(napi_env env, napi_value value, int64_t *out, carrier *c,
                        const char *propName) {
   napi_valuetype type;
@@ -312,33 +348,6 @@ void sendExecute(napi_env env, void *data) {
   }
 }
 
-/*  implicit destruction of NDI sender via garbage collection  */
-void finalizeSend(napi_env env, void *data, void *hint) {
-  /*  fetch NDI sender wrapper object  */
-  napi_value obj = (napi_value)hint;
-
-  /*  fetch NDI sender external object  */
-  napi_value sendValue;
-  if (napi_get_named_property(env, obj, "embedded", &sendValue) != napi_ok)
-    return;
-
-  /*  ensure it was still not manually destroyed  */
-  napi_valuetype result;
-  if (napi_typeof(env, sendValue, &result) != napi_ok)
-    return;
-  if (result != napi_external)
-    return;
-
-  /*  fetch NDI sender native object  */
-  void *sendData;
-  if (napi_get_value_external(env, sendValue, &sendData) != napi_ok)
-    return;
-  NDIlib_send_instance_t send = (NDIlib_send_instance_t)sendData;
-
-  /*  call the NDI API  */
-  NDIlib_send_destroy(send);
-}
-
 /*  explicit destruction of NDI sender via "destroy" method  */
 napi_value destroySend(napi_env env, napi_callback_info info) {
   bool success = false;
@@ -358,15 +367,14 @@ napi_value destroySend(napi_env env, napi_callback_info info) {
     goto create_result;
 
   if (resultType == napi_external) {
-    void *sendData;
-    if (napi_get_value_external(env, sendValue, &sendData) != napi_ok)
+    void *externalData;
+    if (napi_get_value_external(env, sendValue, &externalData) != napi_ok)
       goto create_result;
 
-    NDIlib_send_destroy((NDIlib_send_instance_t)sendData);
+    success = closeNativeHandle((nativeHandle *)externalData);
     napi_value value;
     if (napi_create_int32(env, 0, &value) == napi_ok)
       napi_set_named_property(env, thisValue, "embedded", value);
-    success = true;
   }
 
 create_result:
@@ -391,8 +399,9 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
 
   napi_value embedded;
-  c->status =
-      napi_create_external(env, c->send, finalizeSend, result, &embedded);
+  nativeHandle *handle = createNativeHandle(c->send, destroySendInstance);
+  c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
+                                   &embedded);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
@@ -622,13 +631,8 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value sendValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
-  REJECT_RETURN;
-  void *sendData;
-  c->status = napi_get_value_external(env, sendValue, &sendData);
-  c->send = (NDIlib_send_instance_t)sendData;
-  REJECT_RETURN;
+  if (!acquireSendFromThis(env, thisValue, &c->handle, &c->send, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     napi_value config;
@@ -849,13 +853,8 @@ napi_value audioSend(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  napi_value sendValue;
-  c->status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
-  REJECT_RETURN;
-  void *sendData;
-  c->status = napi_get_value_external(env, sendValue, &sendData);
-  c->send = (NDIlib_send_instance_t)sendData;
-  REJECT_RETURN;
+  if (!acquireSendFromThis(env, thisValue, &c->handle, &c->send, c))
+    REJECT_RETURN;
 
   if (argc >= 1) {
     napi_value config;
@@ -1010,9 +1009,14 @@ napi_value connections(napi_env env, napi_callback_info info) {
   void *sendData;
   status = napi_get_value_external(env, sendValue, &sendData);
   CHECK_STATUS;
-  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendData;
+  nativeHandle *handle = (nativeHandle *)sendData;
+  void *sendInstance;
+  if (!acquireNativeHandle(handle, &sendInstance))
+    NAPI_THROW_ERROR("Sender has been destroyed.");
+  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendInstance;
 
   int conns = NDIlib_send_get_no_connections(sender, 0);
+  releaseNativeHandle(handle);
   napi_value result;
   status = napi_create_int32(env, (int32_t)conns, &result);
   CHECK_STATUS;
@@ -1035,10 +1039,15 @@ napi_value tally(napi_env env, napi_callback_info info) {
   void *sendData;
   status = napi_get_value_external(env, sendValue, &sendData);
   CHECK_STATUS;
-  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendData;
+  nativeHandle *handle = (nativeHandle *)sendData;
+  void *sendInstance;
+  if (!acquireNativeHandle(handle, &sendInstance))
+    NAPI_THROW_ERROR("Sender has been destroyed.");
+  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendInstance;
 
   NDIlib_tally_t tally;
   bool changed = NDIlib_send_get_tally(sender, &tally, 0);
+  releaseNativeHandle(handle);
 
   napi_value result;
   status = napi_create_object(env, &result);
@@ -1070,14 +1079,6 @@ napi_value metadataSend(napi_env env, napi_callback_info info) {
   if (argc != 1)
     NAPI_THROW_ERROR("metadata requires a single string argument.");
 
-  napi_value sendValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
-  CHECK_STATUS;
-  void *sendData;
-  status = napi_get_value_external(env, sendValue, &sendData);
-  CHECK_STATUS;
-  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendData;
-
   napi_valuetype type;
   status = napi_typeof(env, args[0], &type);
   CHECK_STATUS;
@@ -1098,7 +1099,20 @@ napi_value metadataSend(napi_env env, napi_callback_info info) {
   frame.timecode = NDIlib_send_timecode_synthesize;
   frame.p_data = const_cast<char *>(metadata.c_str());
 
+  napi_value sendValue;
+  status = napi_get_named_property(env, thisValue, "embedded", &sendValue);
+  CHECK_STATUS;
+  void *sendData;
+  status = napi_get_value_external(env, sendValue, &sendData);
+  CHECK_STATUS;
+  nativeHandle *handle = (nativeHandle *)sendData;
+  void *sendInstance;
+  if (!acquireNativeHandle(handle, &sendInstance))
+    NAPI_THROW_ERROR("Sender has been destroyed.");
+  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendInstance;
+
   NDIlib_send_send_metadata(sender, &frame);
+  releaseNativeHandle(handle);
 
   napi_value result;
   status = napi_get_boolean(env, true, &result);
@@ -1121,11 +1135,17 @@ napi_value sourcename(napi_env env, napi_callback_info info) {
   void *sendData;
   status = napi_get_value_external(env, sendValue, &sendData);
   CHECK_STATUS;
-  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendData;
+  nativeHandle *handle = (nativeHandle *)sendData;
+  void *sendInstance;
+  if (!acquireNativeHandle(handle, &sendInstance))
+    NAPI_THROW_ERROR("Sender has been destroyed.");
+  NDIlib_send_instance_t sender = (NDIlib_send_instance_t)sendInstance;
 
   const NDIlib_source_t *source = NDIlib_send_get_source_name(sender);
+  std::string sourceName = source->p_ndi_name;
+  releaseNativeHandle(handle);
   napi_value result;
-  status = napi_create_string_utf8(env, source->p_ndi_name, NAPI_AUTO_LENGTH,
+  status = napi_create_string_utf8(env, sourceName.c_str(), NAPI_AUTO_LENGTH,
                                    &result);
   CHECK_STATUS;
 
