@@ -68,6 +68,8 @@ Each platform package under the `@grandi/` scope bundles the native addon (`gran
 ## Using Grandi
 This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. All calls are asynchronous and use JavaScript promises with all of the underlying work of NDI running on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs` and `examples/simple-sender.mjs`.
 
+If you want to run Grandi with [Electron](https://www.electronjs.org/), see the [Electron NDI viewer example app](https://github.com/tux-tn/electron-ndi-viewer).
+
 ### Finding streams
 `grandi.find` resolves to a finder handle that can block for network updates and expose the discovered sources:
 
