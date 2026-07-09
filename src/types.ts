@@ -197,7 +197,7 @@ export interface Routing {
 	name?: string;
 	groups?: string;
 	destroy(): boolean;
-	change(source: Source): boolean;
+	change(source: Source | null | undefined): boolean;
 	clear(): boolean;
 	connections(): number;
 	sourcename(): string;

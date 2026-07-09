@@ -99,7 +99,7 @@ bool acquireFrameSyncFromThis(napi_env env, napi_value thisValue,
     return false;
   if (type != napi_external) {
     c->status = GRANDI_INVALID_ARGS;
-    c->errorMsg = "FrameSync is not initialized.";
+    c->errorMsg = "FrameSync has been destroyed.";
     return false;
   }
   void *externalData;
@@ -160,6 +160,36 @@ framesyncAudioCarrier::~framesyncAudioCarrier() {
   if (wrapper != nullptr)
     releaseFrameSyncWrapper(wrapper);
 }
+
+struct FrameSyncVideoGuard {
+  framesyncWrapper *wrapper = nullptr;
+  NDIlib_video_frame_v2_t frame{};
+
+  explicit FrameSyncVideoGuard(framesyncVideoCarrier *c)
+      : wrapper(c->wrapper), frame(c->videoFrame) {
+    c->wrapper = nullptr;
+  }
+
+  ~FrameSyncVideoGuard() {
+    NDIlib_framesync_free_video(wrapper->fs, &frame);
+    releaseFrameSyncWrapper(wrapper);
+  }
+};
+
+struct FrameSyncAudioGuard {
+  framesyncWrapper *wrapper = nullptr;
+  NDIlib_audio_frame_v3_t frame{};
+
+  explicit FrameSyncAudioGuard(framesyncAudioCarrier *c)
+      : wrapper(c->wrapper), frame(c->audioFrame) {
+    c->wrapper = nullptr;
+  }
+
+  ~FrameSyncAudioGuard() {
+    NDIlib_framesync_free_audio_v2(wrapper->fs, &frame);
+    releaseFrameSyncWrapper(wrapper);
+  }
+};
 
 void finalizeFrameSync(napi_env env, void *data, void *hint) {
   framesyncWrapper *wrapper = (framesyncWrapper *)data;
@@ -236,22 +266,17 @@ napi_value audioQueueDepth(napi_env env, napi_callback_info info) {
   status = napi_get_cb_info(env, info, &argc, nullptr, &thisValue, nullptr);
   CHECK_STATUS;
 
-  napi_value fsValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &fsValue);
-  CHECK_STATUS;
-
-  napi_valuetype type;
-  status = napi_typeof(env, fsValue, &type);
-  CHECK_STATUS;
-  if (type != napi_external)
-    NAPI_THROW_ERROR("FrameSync is not initialized.");
-
-  void *externalData;
-  status = napi_get_value_external(env, fsValue, &externalData);
-  CHECK_STATUS;
-  framesyncWrapper *wrapper = (framesyncWrapper *)externalData;
+  carrier c;
+  framesyncWrapper *wrapper = nullptr;
+  if (!acquireFrameSyncFromThis(env, thisValue, &wrapper, &c)) {
+    napi_throw_error(env, nullptr,
+                     c.errorMsg.empty() ? "FrameSync has been destroyed."
+                                        : c.errorMsg.c_str());
+    return nullptr;
+  }
 
   int depth = NDIlib_framesync_audio_queue_depth(wrapper->fs);
+  releaseFrameSyncWrapper(wrapper);
   napi_value result;
   status = napi_create_int32(env, (int32_t)depth, &result);
   CHECK_STATUS;
@@ -295,7 +320,11 @@ void framesyncComplete(napi_env env, napi_status asyncStatus, void *data) {
   napi_value embedded;
   c->status =
       napi_create_external(env, wrapper, finalizeFrameSync, nullptr, &embedded);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    closeFrameSyncWrapper(env, wrapper);
+    delete wrapper;
+    REJECT_STATUS;
+  }
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
 
@@ -353,10 +382,7 @@ void framesyncVideoComplete(napi_env env, napi_status asyncStatus, void *data) {
   }
   REJECT_STATUS;
 
-  struct Guard {
-    framesyncVideoCarrier *c;
-    ~Guard() { NDIlib_framesync_free_video(c->wrapper->fs, &c->videoFrame); }
-  } guard{c};
+  FrameSyncVideoGuard guard(c);
 
   napi_value result;
   c->status = napi_create_object(env, &result);
@@ -546,10 +572,7 @@ void framesyncAudioComplete(napi_env env, napi_status asyncStatus, void *data) {
   }
   REJECT_STATUS;
 
-  struct Guard {
-    framesyncAudioCarrier *c;
-    ~Guard() { NDIlib_framesync_free_audio_v2(c->wrapper->fs, &c->audioFrame); }
-  } guard{c};
+  FrameSyncAudioGuard guard(c);
 
   napi_value result;
   c->status = napi_create_object(env, &result);

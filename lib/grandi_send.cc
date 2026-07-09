@@ -402,7 +402,11 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data) {
   nativeHandle *handle = createNativeHandle(c->send, destroySendInstance);
   c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
                                    &embedded);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    closeNativeHandle(handle);
+    delete handle;
+    REJECT_STATUS;
+  }
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
 
@@ -1095,7 +1099,9 @@ napi_value metadataSend(napi_env env, napi_callback_info info) {
   metadata.resize(length);
 
   NDIlib_metadata_frame_t frame;
-  frame.length = static_cast<int>(metadata.length());
+  // NDI metadata lengths include the trailing NULL, or can be 0 to have the
+  // SDK derive the length from the NULL-terminated UTF-8 XML string.
+  frame.length = 0;
   frame.timecode = NDIlib_send_timecode_synthesize;
   frame.p_data = const_cast<char *>(metadata.c_str());
 
