@@ -14,6 +14,7 @@
 */
 
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <Processing.NDI.Lib.h>
@@ -32,6 +33,8 @@
 #include "grandi_find.h"
 
 namespace {
+void finalizeMallocBuffer(napi_env env, void *data, void *hint) { free(data); }
+
 void destroyRecvInstance(void *value) {
   NDIlib_recv_destroy((NDIlib_recv_instance_t)value);
 }
@@ -94,6 +97,130 @@ void freeCapturedFrame(dataCarrier *c, NDIlib_frame_type_e frameType) {
   default:
     break;
   }
+}
+
+struct ReceiveFrameGuard {
+  nativeHandle *handle = nullptr;
+  NDIlib_recv_instance_t recv = nullptr;
+  NDIlib_frame_type_e frameType = NDIlib_frame_type_none;
+  NDIlib_video_frame_v2_t videoFrame{};
+  NDIlib_audio_frame_v3_t audioFrame{};
+  NDIlib_metadata_frame_t metadataFrame{};
+
+  ReceiveFrameGuard(dataCarrier *c, NDIlib_frame_type_e type)
+      : handle(c->handle), recv(c->recv), frameType(type),
+        videoFrame(c->videoFrame), audioFrame(c->audioFrame),
+        metadataFrame(c->metadataFrame) {
+    c->handle = nullptr;
+  }
+
+  ~ReceiveFrameGuard() {
+    switch (frameType) {
+    case NDIlib_frame_type_video:
+      NDIlib_recv_free_video_v2(recv, &videoFrame);
+      break;
+    case NDIlib_frame_type_audio:
+      NDIlib_recv_free_audio_v3(recv, &audioFrame);
+      break;
+    case NDIlib_frame_type_metadata:
+      NDIlib_recv_free_metadata(recv, &metadataFrame);
+      break;
+    default:
+      break;
+    }
+    if (handle != nullptr)
+      releaseNativeHandle(handle);
+  }
+};
+
+bool ensurePlanarFloatAudio(dataCarrier *c) {
+  if (c->audioFrame.FourCC != NDIlib_FourCC_audio_type_FLTP ||
+      c->audioFrame.p_data == nullptr || c->audioFrame.no_samples <= 0 ||
+      c->audioFrame.no_channels <= 0 ||
+      c->audioFrame.channel_stride_in_bytes <
+          (int)(sizeof(float) * c->audioFrame.no_samples)) {
+    c->status = GRANDI_ASYNC_FAILURE;
+    c->errorMsg = "Received unsupported NDI audio frame format.";
+    NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
+    return false;
+  }
+  return true;
+}
+
+float planarFloatAudioSample(const NDIlib_audio_frame_v3_t &frame, int channel,
+                             int sample) {
+  uint8_t *channelData =
+      frame.p_data + (size_t)channel * frame.channel_stride_in_bytes;
+  return ((float *)channelData)[sample];
+}
+
+bool convertCapturedAudio(dataCarrier *c) {
+  switch (c->audioFormat) {
+  case Grandi_audio_format_int_16_interleaved: {
+    if (!ensurePlanarFloatAudio(c))
+      return false;
+
+    c->audioFrame16s.sample_rate = c->audioFrame.sample_rate;
+    c->audioFrame16s.no_channels = c->audioFrame.no_channels;
+    c->audioFrame16s.no_samples = c->audioFrame.no_samples;
+    c->audioFrame16s.timecode = c->audioFrame.timecode;
+    c->audioFrame16s.reference_level = c->referenceLevel;
+    c->audioFrame16s.p_data = (short *)malloc(
+        sizeof(short) * c->audioFrame.no_samples * c->audioFrame.no_channels);
+    if (c->audioFrame16s.p_data == nullptr) {
+      c->status = GRANDI_ALLOCATION_FAILURE;
+      c->errorMsg = "Failed to allocate interleaved int16 audio buffer.";
+      NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
+      return false;
+    }
+
+    double scale = 32767.0 / std::pow(10.0, c->referenceLevel / 20.0);
+    size_t out = 0;
+    for (int sample = 0; sample < c->audioFrame.no_samples; sample++) {
+      for (int channel = 0; channel < c->audioFrame.no_channels; channel++) {
+        double value =
+            (double)planarFloatAudioSample(c->audioFrame, channel, sample) *
+            scale;
+        if (value > 32767.0)
+          value = 32767.0;
+        else if (value < -32768.0)
+          value = -32768.0;
+        c->audioFrame16s.p_data[out++] = (short)std::lrint(value);
+      }
+    }
+    break;
+  }
+  case Grandi_audio_format_float_32_interleaved: {
+    if (!ensurePlanarFloatAudio(c))
+      return false;
+
+    c->audioFrame32fIlvd.sample_rate = c->audioFrame.sample_rate;
+    c->audioFrame32fIlvd.no_channels = c->audioFrame.no_channels;
+    c->audioFrame32fIlvd.no_samples = c->audioFrame.no_samples;
+    c->audioFrame32fIlvd.timecode = c->audioFrame.timecode;
+    c->audioFrame32fIlvd.p_data = (float *)malloc(
+        sizeof(float) * c->audioFrame.no_samples * c->audioFrame.no_channels);
+    if (c->audioFrame32fIlvd.p_data == nullptr) {
+      c->status = GRANDI_ALLOCATION_FAILURE;
+      c->errorMsg = "Failed to allocate interleaved float32 audio buffer.";
+      NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame);
+      return false;
+    }
+
+    size_t out = 0;
+    for (int sample = 0; sample < c->audioFrame.no_samples; sample++) {
+      for (int channel = 0; channel < c->audioFrame.no_channels; channel++) {
+        c->audioFrame32fIlvd.p_data[out++] =
+            planarFloatAudioSample(c->audioFrame, channel, sample);
+      }
+    }
+    break;
+  }
+  case Grandi_audio_format_float_32_separate:
+  default:
+    break;
+  }
+  return true;
 }
 
 bool captureUntilFrame(dataCarrier *c, NDIlib_frame_type_e desired,
@@ -192,8 +319,6 @@ void receiveExecute(napi_env env, void *data) {
     c->errorMsg = "Failed to create NDI receiver.";
     return;
   }
-
-  NDIlib_recv_connect(c->recv, c->source);
 }
 
 void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
@@ -213,7 +338,11 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   nativeHandle *handle = createNativeHandle(c->recv, destroyRecvInstance);
   c->status =
       napi_create_external(env, handle, finalizeReceive, nullptr, &embedded);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    closeNativeHandle(handle);
+    delete handle;
+    REJECT_STATUS;
+  }
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
 
@@ -487,10 +616,7 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   }
   REJECT_STATUS;
 
-  struct Guard {
-    dataCarrier *c;
-    ~Guard() { NDIlib_recv_free_video_v2(c->recv, &c->videoFrame); }
-  } guard{c};
+  ReceiveFrameGuard guard(c, NDIlib_frame_type_video);
 
   napi_value result;
   c->status = napi_create_object(env, &result);
@@ -727,26 +853,8 @@ void audioReceiveExecute(napi_env env, void *data) {
           "Received error response from NDI audio request. Connection lost."))
     return;
 
-  const NDIlib_audio_frame_v2_t *audioFrameV2 =
-      reinterpret_cast<const NDIlib_audio_frame_v2_t *>(&c->audioFrame);
-
-  switch (c->audioFormat) {
-  case Grandi_audio_format_int_16_interleaved:
-    c->audioFrame16s.reference_level = c->referenceLevel;
-    c->audioFrame16s.p_data =
-        new short[c->audioFrame.no_samples * c->audioFrame.no_channels];
-    NDIlib_util_audio_to_interleaved_16s_v2(audioFrameV2, &c->audioFrame16s);
-    break;
-  case Grandi_audio_format_float_32_interleaved:
-    c->audioFrame32fIlvd.p_data =
-        new float[c->audioFrame.no_samples * c->audioFrame.no_channels];
-    NDIlib_util_audio_to_interleaved_32f_v2(audioFrameV2,
-                                            &c->audioFrame32fIlvd);
-    break;
-  case Grandi_audio_format_float_32_separate:
-  default:
-    break;
-  }
+  if (!convertCapturedAudio(c))
+    return;
 }
 
 void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
@@ -758,10 +866,7 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   }
   REJECT_STATUS;
 
-  struct Guard {
-    dataCarrier *c;
-    ~Guard() { NDIlib_recv_free_audio_v3(c->recv, &c->audioFrame); }
-  } guard{c};
+  ReceiveFrameGuard guard(c, NDIlib_frame_type_audio);
 
   napi_value result;
   c->status = napi_create_object(env, &result);
@@ -804,10 +909,26 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "samples", param);
   REJECT_STATUS;
 
-  int32_t factor =
-      (c->audioFormat == Grandi_audio_format_int_16_interleaved) ? 2 : 1;
-  c->status = napi_create_int32(
-      env, c->audioFrame.channel_stride_in_bytes / factor, &param);
+  size_t audioBytes = 0;
+  int32_t channelStrideInBytes = c->audioFrame.channel_stride_in_bytes;
+  switch (c->audioFormat) {
+  case Grandi_audio_format_int_16_interleaved:
+    audioBytes =
+        sizeof(short) * c->audioFrame.no_samples * c->audioFrame.no_channels;
+    channelStrideInBytes = sizeof(short) * c->audioFrame.no_samples;
+    break;
+  case Grandi_audio_format_float_32_interleaved:
+    audioBytes =
+        sizeof(float) * c->audioFrame.no_samples * c->audioFrame.no_channels;
+    channelStrideInBytes = sizeof(float) * c->audioFrame.no_samples;
+    break;
+  default:
+  case Grandi_audio_format_float_32_separate:
+    audioBytes = (size_t)c->audioFrame.channel_stride_in_bytes *
+                 (size_t)c->audioFrame.no_channels;
+    break;
+  }
+  c->status = napi_create_int32(env, channelStrideInBytes, &param);
   REJECT_STATUS;
   c->status =
       napi_set_named_property(env, result, "channelStrideInBytes", param);
@@ -863,11 +984,17 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
     rawFloats = (char *)c->audioFrame.p_data;
     break;
   }
-  c->status =
-      napi_create_buffer_copy(env,
-                              (c->audioFrame.channel_stride_in_bytes / factor) *
-                                  c->audioFrame.no_channels,
-                              rawFloats, nullptr, &param);
+  if (c->audioFormat == Grandi_audio_format_float_32_separate) {
+    c->status =
+        napi_create_buffer_copy(env, audioBytes, rawFloats, nullptr, &param);
+  } else {
+    c->status = napi_create_external_buffer(
+        env, audioBytes, rawFloats, finalizeMallocBuffer, nullptr, &param);
+    if (c->status == napi_ok) {
+      c->audioFrame16s.p_data = nullptr;
+      c->audioFrame32fIlvd.p_data = nullptr;
+    }
+  }
   REJECT_STATUS;
 
   c->status = napi_set_named_property(env, result, "data", param);
@@ -1004,10 +1131,7 @@ void metadataReceiveComplete(napi_env env, napi_status asyncStatus,
   }
   REJECT_STATUS;
 
-  struct Guard {
-    dataCarrier *c;
-    ~Guard() { NDIlib_recv_free_metadata(c->recv, &c->metadataFrame); }
-  } guard{c};
+  ReceiveFrameGuard guard(c, NDIlib_frame_type_metadata);
 
   napi_value result;
   c->status = napi_create_object(env, &result);
@@ -1114,25 +1238,8 @@ void dataReceiveExecute(napi_env env, void *data) {
 
   // Audio data
   case NDIlib_frame_type_audio: {
-    const NDIlib_audio_frame_v2_t *audioFrameV2 =
-        reinterpret_cast<const NDIlib_audio_frame_v2_t *>(&c->audioFrame);
-    switch (c->audioFormat) {
-    case Grandi_audio_format_int_16_interleaved:
-      c->audioFrame16s.reference_level = c->referenceLevel;
-      c->audioFrame16s.p_data =
-          new short[c->audioFrame.no_samples * c->audioFrame.no_channels];
-      NDIlib_util_audio_to_interleaved_16s_v2(audioFrameV2, &c->audioFrame16s);
-      break;
-    case Grandi_audio_format_float_32_interleaved:
-      c->audioFrame32fIlvd.p_data =
-          new float[c->audioFrame.no_samples * c->audioFrame.no_channels];
-      NDIlib_util_audio_to_interleaved_32f_v2(audioFrameV2,
-                                              &c->audioFrame32fIlvd);
-      break;
-    case Grandi_audio_format_float_32_separate:
-    default:
-      break;
-    }
+    if (!convertCapturedAudio(c))
+      return;
     break;
   }
 

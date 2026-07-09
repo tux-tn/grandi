@@ -44,6 +44,36 @@ typedef struct embeddedValue {
   void *value;
 } embeddedValue_t;
 
+bool getRoutingInstanceFromThis(napi_env env, napi_value thisValue,
+                                NDIlib_routing_instance_t *routing) {
+  napi_value embeddedValue;
+  napi_status status =
+      napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
+  if (status != napi_ok)
+    return false;
+
+  napi_valuetype type;
+  status = napi_typeof(env, embeddedValue, &type);
+  if (status != napi_ok)
+    return false;
+  if (type != napi_external) {
+    napi_throw_error(env, nullptr, "Routing has been destroyed.");
+    return false;
+  }
+
+  embeddedValue_t *embeddedData;
+  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
+  if (status != napi_ok)
+    return false;
+  if (embeddedData == nullptr || embeddedData->value == nullptr) {
+    napi_throw_error(env, nullptr, "Routing has been destroyed.");
+    return false;
+  }
+
+  *routing = (NDIlib_routing_instance_t)(embeddedData->value);
+  return true;
+}
+
 /*  callback for destroying embedded value  */
 void finalizeRouting(napi_env env, void *data, void *hint) {
   embeddedValue_t *embeddedValue = (embeddedValue_t *)data;
@@ -298,14 +328,9 @@ napi_value routing_change(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
-  napi_value embeddedValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-  CHECK_STATUS;
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-  CHECK_STATUS;
-  NDIlib_routing_instance_t routing =
-      (NDIlib_routing_instance_t)(embeddedData->value);
+  NDIlib_routing_instance_t routing;
+  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+    return nullptr;
 
   /*  fetch source argument  */
   if (argc != (size_t)1)
@@ -346,16 +371,15 @@ napi_value routing_change(napi_env env, napi_callback_info info) {
     NAPI_THROW_ERROR("Source 'urlAddress' sub-property must be of type string.")
 
   /*  create NDI native source object  */
-  NDIlib_source_t *ndi_source = new NDIlib_source_t();
-  status = makeNativeSource(env, source, ndi_source);
+  NDIlib_source_t ndi_source{};
+  status = makeNativeSource(env, source, &ndi_source);
   CHECK_STATUS;
 
   /*  call NDI API functionality  */
-  int ok = NDIlib_routing_change(routing, ndi_source);
+  int ok = NDIlib_routing_change(routing, &ndi_source);
 
   /*  cleanup resource  */
-  freeNativeSource(ndi_source);
-  delete ndi_source;
+  freeNativeSource(&ndi_source);
 
   /*  return a boolean result  */
   napi_value result;
@@ -377,14 +401,9 @@ napi_value routing_clear(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
-  napi_value embeddedValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-  CHECK_STATUS;
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-  CHECK_STATUS;
-  NDIlib_routing_instance_t routing =
-      (NDIlib_routing_instance_t)(embeddedData->value);
+  NDIlib_routing_instance_t routing;
+  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+    return nullptr;
 
   /*  call NDI API functionality  */
   int ok = NDIlib_routing_clear(routing);
@@ -409,14 +428,9 @@ napi_value routing_connections(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
-  napi_value embeddedValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-  CHECK_STATUS;
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-  CHECK_STATUS;
-  NDIlib_routing_instance_t routing =
-      (NDIlib_routing_instance_t)(embeddedData->value);
+  NDIlib_routing_instance_t routing;
+  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+    return nullptr;
 
   /*  call NDI API functionality  */
   int conns = NDIlib_routing_get_no_connections(routing, 0);
@@ -441,14 +455,9 @@ napi_value routing_sourcename(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
-  napi_value embeddedValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-  CHECK_STATUS;
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-  CHECK_STATUS;
-  NDIlib_routing_instance_t routing =
-      (NDIlib_routing_instance_t)(embeddedData->value);
+  NDIlib_routing_instance_t routing;
+  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+    return nullptr;
 
   /*  call NDI API functionality  */
   const NDIlib_source_t *source = NDIlib_routing_get_source_name(routing);

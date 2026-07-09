@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it, test } from "vitest";
 
 import grandi from "../../src/index";
 import type {
+	FrameSync,
+	ReceivedAudioFrame,
 	ReceivedVideoFrame,
 	Receiver,
 	Sender,
@@ -107,6 +109,81 @@ async function waitForAudioFrame(
 			return frame;
 	}
 	throw new Error("Timed out waiting for audio frame");
+}
+
+async function waitForDataAudioFrame(
+	receiver: Receiver,
+	options: { audioFormat: number; referenceLevel?: number },
+	expected: { sampleRate: number; channels: number },
+	timeoutMs = 5_000,
+): Promise<ReceivedAudioFrame> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const remaining = Math.max(0, deadline - Date.now());
+		const frame = await receiver.data(options, Math.min(500, remaining));
+
+		if (frame.type !== "audio") continue;
+		if (
+			frame.sampleRate === expected.sampleRate &&
+			frame.channels === expected.channels
+		)
+			return frame;
+	}
+	throw new Error("Timed out waiting for data audio frame");
+}
+
+function assertInterleavedAudioFrame(
+	frame: ReceivedAudioFrame,
+	expected: {
+		audioFormat: number;
+		bytesPerSample: number;
+		referenceLevel?: number;
+	},
+) {
+	expect(frame.type).toBe("audio");
+	expect(frame.audioFormat).toBe(expected.audioFormat);
+	if (expected.referenceLevel !== undefined)
+		expect(frame.referenceLevel).toBe(expected.referenceLevel);
+	expect(frame.sampleRate).toBe(48_000);
+	expect(frame.channels).toBe(2);
+	expect(frame.samples).toBeGreaterThan(0);
+	expect(Buffer.isBuffer(frame.data)).toBe(true);
+	expect(frame.data.byteLength).toBe(
+		frame.samples * frame.channels * expected.bytesPerSample,
+	);
+	expect(frame.channelStrideInBytes).toBe(
+		frame.samples * expected.bytesPerSample,
+	);
+}
+
+async function waitForFrameSyncVideoFrame(
+	fs: FrameSync,
+	expected: { xres: number; yres: number },
+	timeoutMs = 5_000,
+): Promise<ReceivedVideoFrame> {
+	const deadline = Date.now() + timeoutMs;
+	let lastVideoFrame: ReceivedVideoFrame | undefined;
+
+	while (Date.now() < deadline) {
+		const frame = await fs.video();
+		if (frame.type === "timeout") {
+			await sleep(50);
+			continue;
+		}
+		lastVideoFrame = frame;
+
+		if (frame.xres === expected.xres && frame.yres === expected.yres)
+			return frame;
+
+		await sleep(50);
+	}
+
+	throw new Error(
+		`Timed out waiting for framesync ${expected.xres}x${expected.yres} video frame` +
+			(lastVideoFrame
+				? `; last was ${lastVideoFrame.xres}x${lastVideoFrame.yres}`
+				: ""),
+	);
 }
 
 async function waitForVideoFrameSize(
@@ -234,6 +311,7 @@ describe("grandi native addon (integration)", () => {
 			if (!metadataFrame)
 				throw new Error("Timed out waiting for metadata containing 'ping'");
 			expect(metadataFrame.type).toBe("metadata");
+			expect(metadataFrame.data).toContain("<test>ping</test>");
 
 			const audioFrame = await waitForAudioFrame(receiver, {
 				sampleRate: 48_000,
@@ -245,6 +323,32 @@ describe("grandi native addon (integration)", () => {
 				grandi.AudioFormat.Float32Interleaved,
 			]).toContain(audioFrame.audioFormat);
 			expect(Buffer.isBuffer(audioFrame.data)).toBe(true);
+
+			const int16Audio = await receiver.audio(
+				{
+					audioFormat: grandi.AudioFormat.Int16Interleaved,
+					referenceLevel: 0,
+				},
+				5_000,
+			);
+			expect(int16Audio.audioFormat).toBe(grandi.AudioFormat.Int16Interleaved);
+			expect(int16Audio.referenceLevel).toBe(0);
+			expect(Buffer.isBuffer(int16Audio.data)).toBe(true);
+			expect(int16Audio.data.byteLength).toBe(
+				int16Audio.samples * int16Audio.channels * 2,
+			);
+
+			const interleavedFloatAudio = await receiver.audio(
+				{ audioFormat: grandi.AudioFormat.Float32Interleaved },
+				5_000,
+			);
+			expect(interleavedFloatAudio.audioFormat).toBe(
+				grandi.AudioFormat.Float32Interleaved,
+			);
+			expect(Buffer.isBuffer(interleavedFloatAudio.data)).toBe(true);
+			expect(interleavedFloatAudio.data.byteLength).toBe(
+				interleavedFloatAudio.samples * interleavedFloatAudio.channels * 4,
+			);
 		} finally {
 			controller.running = false;
 			await pumpTask;
@@ -256,6 +360,172 @@ describe("grandi native addon (integration)", () => {
 				expect(tallyAfterDisconnect.changed).toBe(true);
 				expect(sender.tally().changed).toBe(false);
 			}
+			sender.destroy();
+		}
+	}, 120_000);
+
+	test("receives interleaved audio through data()", async () => {
+		const senderName = `grandi-data-audio-${Date.now()}`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: true,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+		let receiver: Receiver | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			receiver = await grandi.receive({
+				source,
+				name: `${senderName}-receiver`,
+				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+			});
+
+			const int16Audio = await waitForDataAudioFrame(
+				receiver,
+				{
+					audioFormat: grandi.AudioFormat.Int16Interleaved,
+					referenceLevel: 0,
+				},
+				{ sampleRate: 48_000, channels: 2 },
+				10_000,
+			);
+			assertInterleavedAudioFrame(int16Audio, {
+				audioFormat: grandi.AudioFormat.Int16Interleaved,
+				bytesPerSample: 2,
+				referenceLevel: 0,
+			});
+
+			const float32Audio = await waitForDataAudioFrame(
+				receiver,
+				{ audioFormat: grandi.AudioFormat.Float32Interleaved },
+				{ sampleRate: 48_000, channels: 2 },
+				10_000,
+			);
+			assertInterleavedAudioFrame(float32Audio, {
+				audioFormat: grandi.AudioFormat.Float32Interleaved,
+				bytesPerSample: 4,
+			});
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			receiver?.destroy();
+			sender.destroy();
+		}
+	}, 120_000);
+
+	test("keeps in-flight receiver captures alive when receiver is destroyed", async () => {
+		const senderName = `grandi-destroy-recv-${Date.now()}`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: true,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+		let videoReceiver: Receiver | undefined;
+		let audioReceiver: Receiver | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			videoReceiver = await grandi.receive({
+				source,
+				name: `${senderName}-video-receiver`,
+				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+			});
+			audioReceiver = await grandi.receive({
+				source,
+				name: `${senderName}-audio-receiver`,
+				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+			});
+
+			const videoPromise = videoReceiver.video(10_000);
+			expect(videoReceiver.destroy()).toBe(true);
+			const videoFrame = await videoPromise;
+			assertReceivedVideoFrame(videoFrame);
+			expect(videoFrame.xres).toBe(64);
+			expect(videoFrame.yres).toBe(36);
+			await expect(videoReceiver.video(1)).rejects.toThrow(
+				"Receiver is not initialized.",
+			);
+
+			const audioPromise = audioReceiver.audio(
+				{ audioFormat: grandi.AudioFormat.Float32Interleaved },
+				10_000,
+			);
+			expect(audioReceiver.destroy()).toBe(true);
+			const audioFrame = await audioPromise;
+			assertInterleavedAudioFrame(audioFrame, {
+				audioFormat: grandi.AudioFormat.Float32Interleaved,
+				bytesPerSample: 4,
+			});
+			await expect(audioReceiver.audio(1)).rejects.toThrow(
+				"Receiver is not initialized.",
+			);
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			videoReceiver?.destroy();
+			audioReceiver?.destroy();
+			sender.destroy();
+		}
+	}, 120_000);
+
+	test("captures framesync video and audio repeatedly before cleanup", async () => {
+		const senderName = `grandi-destroy-fs-${Date.now()}`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: true,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+		let receiver: Receiver | undefined;
+		let fs: FrameSync | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			receiver = await grandi.receive({
+				source,
+				name: `${senderName}-receiver`,
+				colorFormat: grandi.ColorFormat.Fastest,
+			});
+			fs = await grandi.framesync(receiver);
+
+			for (let i = 0; i < 3; i++) {
+				const videoFrame = await waitForFrameSyncVideoFrame(
+					fs,
+					{ xres: 64, yres: 36 },
+					10_000,
+				);
+				assertReceivedVideoFrame(videoFrame);
+
+				const audioFrame = await fs.audio({
+					sampleRate: 48_000,
+					noChannels: 2,
+					noSamples: 1600,
+				});
+				expect(audioFrame.type).toBe("audio");
+				expect(audioFrame.sampleRate).toBe(48_000);
+				expect(audioFrame.channels).toBe(2);
+				expect(audioFrame.samples).toBe(1600);
+				expect(Buffer.isBuffer(audioFrame.data)).toBe(true);
+				expect(audioFrame.data.byteLength).toBe(
+					audioFrame.channelStrideInBytes * audioFrame.channels,
+				);
+			}
+
+			expect(fs.destroy()).toBe(true);
+			expect(() => fs.audioQueueDepth()).toThrow(
+				"FrameSync has been destroyed.",
+			);
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			fs?.destroy();
+			receiver?.destroy();
 			sender.destroy();
 		}
 	}, 120_000);
@@ -278,7 +548,7 @@ describe("grandi native addon (integration)", () => {
 			routing = await grandi.routing({ name: routingName });
 			expect(routing.change(source)).toBe(true);
 			expect(routing.sourcename()).toContain(routingName);
-			expect(routing.change(null as never)).toBe(true);
+			expect(routing.change(null)).toBe(true);
 
 			const routedSource = await waitForSourceByName(routingName);
 			routedReceiver = await grandi.receive({
@@ -301,6 +571,11 @@ describe("grandi native addon (integration)", () => {
 			expect(routing.connections()).toBeGreaterThanOrEqual(1);
 
 			expect(routing.clear()).toBe(true);
+			expect(routing.destroy()).toBe(true);
+			expect(() => routing.connections()).toThrow(
+				"Routing has been destroyed.",
+			);
+			expect(() => routing.clear()).toThrow("Routing has been destroyed.");
 		} finally {
 			controller.running = false;
 			await pumpTask;
@@ -333,21 +608,11 @@ describe("grandi native addon (integration)", () => {
 
 			fs = await grandi.framesync(receiver);
 
-			// Pull video until we see the expected size (framesync returns timeout when none yet).
-			const expected = { xres: 64, yres: 36 };
-			const deadline = Date.now() + 10_000;
-			let videoFrame: ReceivedVideoFrame | undefined;
-			while (Date.now() < deadline) {
-				const frame = await fs.video();
-				if (frame.type === "timeout") continue;
-				if (frame.xres === expected.xres && frame.yres === expected.yres) {
-					videoFrame = frame;
-					break;
-				}
-			}
-			if (!videoFrame) {
-				throw new Error("Timed out waiting for framesync video frame");
-			}
+			const videoFrame = await waitForFrameSyncVideoFrame(
+				fs,
+				{ xres: 64, yres: 36 },
+				10_000,
+			);
 			assertReceivedVideoFrame(videoFrame);
 
 			const audioFrame = await fs.audio({
@@ -361,6 +626,11 @@ describe("grandi native addon (integration)", () => {
 			expect(audioFrame.samples).toBeGreaterThan(0);
 			expect(Buffer.isBuffer(audioFrame.data)).toBe(true);
 			expect(fs.audioQueueDepth()).toBeGreaterThanOrEqual(0);
+
+			expect(fs.destroy()).toBe(true);
+			expect(() => fs.audioQueueDepth()).toThrow(
+				"FrameSync has been destroyed.",
+			);
 		} finally {
 			controller.running = false;
 			await pumpTask;

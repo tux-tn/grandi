@@ -16,6 +16,7 @@
 #ifndef GRANDI_RECEIVE_H
 #define GRANDI_RECEIVE_H
 
+#include <cstdlib>
 #include "node_api.h"
 #include "grandi_util.h"
 
@@ -47,19 +48,19 @@ struct dataCarrier : carrier {
   nativeHandle *handle = nullptr;
   uint32_t wait = 10000;
   NDIlib_recv_instance_t recv;
-  NDIlib_frame_type_e frameType;
-  NDIlib_video_frame_v2_t videoFrame;
-  NDIlib_audio_frame_v3_t audioFrame;
+  NDIlib_frame_type_e frameType = NDIlib_frame_type_none;
+  NDIlib_video_frame_v2_t videoFrame{};
+  NDIlib_audio_frame_v3_t audioFrame{};
   NDIlib_audio_frame_interleaved_16s_t audioFrame16s{};
   NDIlib_audio_frame_interleaved_32f_t audioFrame32fIlvd{};
   int32_t referenceLevel = 20;
   Grandi_audio_format_e audioFormat = Grandi_audio_format_float_32_separate;
-  NDIlib_metadata_frame_t metadataFrame;
+  NDIlib_metadata_frame_t metadataFrame{};
   ~dataCarrier() {
     if (handle != nullptr)
       releaseNativeHandle(handle);
-    delete[] audioFrame16s.p_data;
-    delete[] audioFrame32fIlvd.p_data;
+    free(audioFrame16s.p_data);
+    free(audioFrame32fIlvd.p_data);
   }
 };
 

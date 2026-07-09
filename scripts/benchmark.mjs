@@ -1,6 +1,7 @@
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 import grandi from "../dist/index.mjs";
+import pkg from "../package.json" with { type: "json" };
 
 function maybeCollectGarbage(state) {
   if (typeof global.gc !== "function") return;
@@ -384,7 +385,9 @@ async function main() {
     const latency = summarizeLatencies(videoLatenciesMs, videoLatencyCount);
 
     console.log(c.bold(c.cyan("Benchmark results")) + c.gray(` (${args.mode}, ${elapsedMs}ms)`));
-    console.log(`${c.bold("- sender.name:")} ${c.green(senderName)}`);
+    console.log(`${c.bold("- NDI SDK version:")} ${c.green(grandi.version())}`);
+    console.log(`${c.bold("- Grandi version:")} ${c.green(pkg.version)}`);
+    console.log(`${c.bold("- sender name:")} ${c.green(senderName)}`);
     console.log(
       `${c.bold("- format:")} ${c.green(`${args.width}x${args.height}`)} ` +
         `${c.gray(`(${args.fps} fps target)`)}`,
