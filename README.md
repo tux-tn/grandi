@@ -178,6 +178,8 @@ Example frame:
 }
 ```
 
+The receive-only `timestamp` is omitted when the NDI SDK reports that it is unavailable. The same applies to received audio frames.
+
 #### Audio
 
 ```ts
@@ -432,7 +434,7 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 | `AudioReceiveOptions` | `{ audioFormat?: AudioFormat; referenceLevel?: number; }` | Used when calling `receiver.audio` or `receiver.data`. |
 | `ReceiverTallyState` | `{ onProgram?: boolean; onPreview?: boolean; }` | Provided to `receiver.tally` to reflect monitoring state. |
 | `SenderTally` | `{ changed: boolean; on_program: boolean; on_preview: boolean; }` | Returned by `sender.tally`. |
-| `Timecode` | `bigint` | NDI timecode/timestamp input in 100-nanosecond units. Use `bigint` to preserve the full signed 64-bit value. Received timing values are raw `bigint` values. |
+| `Timecode` | `bigint` | NDI timecode in 100-nanosecond units. Use `bigint` to preserve the full signed 64-bit value. Received timecodes remain raw `bigint` values. |
 | `TIMECODE_SYNTHESIZE` | `bigint` (`9223372036854775807n`) | NDI sentinel equivalent to `NDIlib_send_timecode_synthesize`; asks NDI to synthesize a timecode. This is the default when `timecode` is omitted. |
 
 ### Frame payload types
@@ -440,9 +442,9 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 | Type | Description |
 | --- | --- |
 | `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `metadata`. |
-| `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"` and non-optional raw `bigint` `timecode`/`timestamp`. |
+| `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"`, a raw `bigint` `timecode`, and an optional raw `bigint` receive `timestamp`. |
 | `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC`, optional `timecode`, `metadata`. |
-| `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, and raw `bigint` `timecode`/`timestamp`. |
+| `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, raw `bigint` `timecode`, and an optional raw `bigint` receive `timestamp`. |
 | `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, raw `bigint` `timecode`, `data` string). |
 | `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent`. |
 | `SourceChangeEvent` / `StatusChangeEvent` | Internal notifications delivered via `receiver.data` when the remote sender changes or becomes unavailable. |

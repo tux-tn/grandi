@@ -660,10 +660,12 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "pictureAspectRatio", param);
   REJECT_STATUS;
 
-  c->status = napi_create_bigint_int64(env, c->videoFrame.timestamp, &param);
-  REJECT_STATUS;
-  c->status = napi_set_named_property(env, result, "timestamp", param);
-  REJECT_STATUS;
+  if (c->videoFrame.timestamp != NDIlib_recv_timestamp_undefined) {
+    c->status = napi_create_bigint_int64(env, c->videoFrame.timestamp, &param);
+    REJECT_STATUS;
+    c->status = napi_set_named_property(env, result, "timestamp", param);
+    REJECT_STATUS;
+  }
 
   c->status = napi_create_int32(env, c->videoFrame.FourCC, &param);
   REJECT_STATUS;
@@ -913,10 +915,12 @@ void audioReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
       napi_set_named_property(env, result, "channelStrideInBytes", param);
   REJECT_STATUS;
 
-  c->status = napi_create_bigint_int64(env, c->audioFrame.timestamp, &param);
-  REJECT_STATUS;
-  c->status = napi_set_named_property(env, result, "timestamp", param);
-  REJECT_STATUS;
+  if (c->audioFrame.timestamp != NDIlib_recv_timestamp_undefined) {
+    c->status = napi_create_bigint_int64(env, c->audioFrame.timestamp, &param);
+    REJECT_STATUS;
+    c->status = napi_set_named_property(env, result, "timestamp", param);
+    REJECT_STATUS;
+  }
 
   c->status = napi_create_bigint_int64(env, c->audioFrame.timecode, &param);
   REJECT_STATUS;

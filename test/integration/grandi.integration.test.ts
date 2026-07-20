@@ -78,7 +78,8 @@ function assertReceivedVideoFrame(frame: ReceivedVideoFrame) {
 	expect(typeof frame.frameRateD).toBe("number");
 	expect(Buffer.isBuffer(frame.data)).toBe(true);
 	expect(typeof frame.timecode).toBe("bigint");
-	expect(typeof frame.timestamp).toBe("bigint");
+	if (frame.timestamp !== undefined)
+		expect(typeof frame.timestamp).toBe("bigint");
 }
 
 function assertTallyShape(tally: SenderTally) {
