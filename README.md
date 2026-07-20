@@ -66,7 +66,7 @@ const grandi = require("grandi");
 Each platform package under the `@grandi/` scope bundles the native addon (`grandi.node`) and the corresponding NDI SDK runtime for that OS/arch. The root `grandi` package loads the matching optional dependency first and only compiles locally when no published package is available. Maintainers regenerate those packages from the official NDI SDK by running `node scripts/preinstall.mjs` (to download and stage the SDK) followed by a version bump (e.g., `node scripts/bump-version.mjs <version>`).
 
 ## Using Grandi
-This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. All calls are asynchronous and use JavaScript promises with all of the underlying work of NDI running on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs` and `examples/simple-sender.mjs`.
+This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. All calls are asynchronous and use JavaScript promises with all of the underlying work of NDI running on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs`, `examples/simple-sender.mjs`, and `examples/simple-framesync.mjs`.
 
 If you want to run Grandi with [Electron](https://www.electronjs.org/), see the [Electron NDI viewer example app](https://github.com/tux-tn/electron-ndi-viewer).
 
@@ -170,9 +170,9 @@ Example frame:
   frameRateN: 30000,
   frameRateD: 1001,
   pictureAspectRatio: 1.7777777910232544,
-  timestamp: [1538569443, 717845600],
+  timestamp: 15385694437178456n,
   frameFormatType: grandi.FORMAT_TYPE_INTERLACED,
-  timecode: [0, 0],
+  timecode: 0n,
   lineStrideBytes: 3840,
   data: <Buffer 80 10 80 10 ... >
 }
@@ -201,8 +201,8 @@ Example result:
   channels: 4,
   samples: 4800,
   channelStrideInBytes: 9600,
-  timestamp: [1538578787, 132614500],
-  timecode: [0, 800000000],
+  timestamp: 15385787871326145n,
+  timecode: 8000000n,
   data: <Buffer 00 00 00 00 ... >
 }
 ```
@@ -259,13 +259,6 @@ const sender = await grandi.send({
   clockAudio: true
 });
 
-const timecode = process.hrtime.bigint() / 100n;
-const timestampNs = process.hrtime.bigint();
-const timestamp = [
-  Number(timestampNs / 1_000_000_000n),
-  Number(timestampNs % 1_000_000_000n),
-];
-
 // Prepare frame payloads (see examples/simple-sender.mjs for helpers)
 
 await sender.video({
@@ -278,8 +271,6 @@ await sender.video({
   lineStrideBytes: 1280 * 4,
   data: whiteBuffer, // BGRA pixels
   fourCC: grandi.FOURCC_BGRA,
-  timecode,
-  timestamp,
 });
 
 await sender.audio({
@@ -289,8 +280,6 @@ await sender.audio({
   channelStrideBytes: 1600 * 4,
   data: silentAudioBuffer,
   fourCC: grandi.FOURCC_FLTp,
-  timecode,
-  timestamp,
 });
 
 # Example metadata, that explicitly enable hardware acceleration in receiver
@@ -360,7 +349,7 @@ Ready to hack on Grandi? Here’s the typical workflow.
 	- `npm run lint` runs Oxlint; `npm run format` checks Oxfmt output, and `npm run format:fix` writes formatting changes.
 	- `npm run format:cpp` formats the native sources with `clang-format`.
 7. **Manual verification**
-	- `node examples/simple-sender.mjs` and `node examples/simple-receiver.mjs` are quick smoke tests for the send/receive API.
+	- `node examples/simple-sender.mjs`, `node examples/simple-receiver.mjs`, and `node examples/simple-framesync.mjs` are quick smoke tests for the send, receive, and pull-based frame-sync APIs.
 
 Before opening a pull request, make sure the linter, formatter, and tests all pass, and include context for any platform-specific considerations (e.g., SDK versions, OS dependencies).
 
@@ -439,18 +428,18 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 | `AudioReceiveOptions` | `{ audioFormat?: AudioFormat; referenceLevel?: number; }` | Used when calling `receiver.audio` or `receiver.data`. |
 | `ReceiverTallyState` | `{ onProgram?: boolean; onPreview?: boolean; }` | Provided to `receiver.tally` to reflect monitoring state. |
 | `SenderTally` | `{ changed: boolean; on_program: boolean; on_preview: boolean; }` | Returned by `sender.tally`. |
-| `PtpTimestamp` | `[seconds, nanoseconds]` | Tuple aligning with the NDI SDK timestamp APIs. |
-| `Timecode` | `bigint \| number \| PtpTimestamp` | Matches how timecodes are expressed throughout the SDK. |
+| `Timecode` | `bigint` | NDI timecode/timestamp input in 100-nanosecond units. Use `bigint` to preserve the full signed 64-bit value. Received timing values are raw `bigint` values. |
+| `TIMECODE_SYNTHESIZE` | `bigint` (`9223372036854775807n`) | NDI sentinel equivalent to `NDIlib_send_timecode_synthesize`; asks NDI to synthesize a timecode. This is the default when `timecode` is omitted. |
 
 ### Frame payload types
 
 | Type | Description |
 | --- | --- |
 | `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `timestamp`, `metadata`. |
-| `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"` and non-optional `timecode`/`timestamp`. |
+| `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"` and non-optional raw `bigint` `timecode`/`timestamp`. |
 | `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC`, optional timing/metadata. |
-| `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, `timecode`, `timestamp`. |
-| `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, `timecode`, `timestamp`, `data` string). |
+| `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, and raw `bigint` `timecode`/`timestamp`. |
+| `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, raw `bigint` `timecode`, `data` string). |
 | `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent`. |
 | `SourceChangeEvent` / `StatusChangeEvent` | Internal notifications delivered via `receiver.data` when the remote sender changes or becomes unavailable. |
 
