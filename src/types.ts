@@ -205,7 +205,12 @@ export interface Routing {
 export interface FrameSyncAudioOptions {
 	sampleRate?: number;
 	noChannels?: number;
-	noSamples?: number;
+	noSamples: number;
+}
+
+export interface FrameSyncAudioFormat {
+	sampleRate: number;
+	noChannels: number;
 }
 
 export interface FrameSync {
@@ -220,8 +225,15 @@ export interface FrameSync {
 	/**
 	 * Captures audio using NDI frame-synchronization (resampled to match your calls).
 	 * Always returns immediately and may insert silence if no audio is present.
+	 * `noSamples` must be greater than zero. Omit `sampleRate` or `noChannels`
+	 * to use the current incoming format.
 	 */
-	audio(options?: FrameSyncAudioOptions): Promise<ReceivedAudioFrame>;
+	audio(options: FrameSyncAudioOptions): Promise<ReceivedAudioFrame>;
+	/**
+	 * Returns the current incoming audio format, or `undefined` when no audio
+	 * format has been received yet.
+	 */
+	audioFormat(): FrameSyncAudioFormat | undefined;
 	/**
 	 * Returns an approximate depth of the internal audio queue in samples.
 	 */

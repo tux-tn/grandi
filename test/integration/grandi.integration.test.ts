@@ -566,6 +566,12 @@ describe("grandi native addon (integration)", () => {
 				colorFormat: grandi.ColorFormat.Fastest,
 			});
 			fs = await grandi.framesync(receiver);
+			await expect(fs.audio({} as never)).rejects.toThrow(
+				"noSamples must be a number.",
+			);
+			await expect(fs.audio({ noSamples: 0 })).rejects.toThrow(
+				"noSamples must be greater than zero.",
+			);
 
 			for (let i = 0; i < 3; i++) {
 				const videoFrame = await waitForFrameSyncVideoFrame(
@@ -589,6 +595,19 @@ describe("grandi native addon (integration)", () => {
 					audioFrame.channelStrideInBytes * audioFrame.channels,
 				);
 			}
+			let audioFormat = fs.audioFormat();
+			for (
+				let attempt = 0;
+				audioFormat === undefined && attempt < 20;
+				attempt++
+			) {
+				await sleep(50);
+				audioFormat = fs.audioFormat();
+			}
+			expect(audioFormat).toEqual({
+				sampleRate: 48_000,
+				noChannels: 2,
+			});
 
 			expect(fs.destroy()).toBe(true);
 			expect(() => fs.audioQueueDepth()).toThrow(

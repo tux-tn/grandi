@@ -290,6 +290,7 @@ export type {
 	Finder,
 	FindOptions,
 	FrameSync,
+	FrameSyncAudioFormat,
 	FrameSyncAudioOptions,
 	Grandi,
 	ReceivedAudioFrame,
