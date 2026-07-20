@@ -327,7 +327,6 @@ napi_value audioFormat(napi_env env, napi_callback_info info) {
   return result;
 }
 
-
 void framesyncExecute(napi_env env, void *data) {
   framesyncCarrier *c = (framesyncCarrier *)data;
   c->fs = NDIlib_framesync_create(c->recv);
@@ -400,7 +399,6 @@ void framesyncComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status =
       napi_set_named_property(env, result, "audioFormat", audioFormatFn);
   REJECT_STATUS;
-
 
   napi_value audioQueueDepthFn;
   c->status =
@@ -719,8 +717,7 @@ napi_value framesyncAudio(napi_env env, napi_callback_info info) {
   }
 
   napi_value channelsValue;
-  c->status =
-      napi_get_named_property(env, options, "channels", &channelsValue);
+  c->status = napi_get_named_property(env, options, "channels", &channelsValue);
   REJECT_RETURN;
   c->status = napi_typeof(env, channelsValue, &type);
   REJECT_RETURN;

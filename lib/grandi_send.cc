@@ -654,13 +654,9 @@ napi_value videoSend(napi_env env, napi_callback_info info) {
     if (!parseTimeProperty(env, config, "timecode", &c->videoFrame.timecode, c))
       REJECT_RETURN;
 
-    c->videoFrame.timestamp = 0;
-    if (!parseTimeProperty(env, config, "timestamp", &c->videoFrame.timestamp,
-                           c))
-      REJECT_RETURN;
-
     c->frameMetadata.clear();
     c->videoFrame.p_metadata = nullptr;
+
     c->status = napi_get_named_property(env, config, "metadata", &param);
     REJECT_RETURN;
     c->status = napi_typeof(env, param, &type);
@@ -855,16 +851,12 @@ napi_value audioSend(napi_env env, napi_callback_info info) {
     if (!parseTimeProperty(env, config, "timecode", &c->audioFrame.timecode, c))
       REJECT_RETURN;
 
-    c->audioFrame.timestamp = 0;
-    if (!parseTimeProperty(env, config, "timestamp", &c->audioFrame.timestamp,
-                           c))
-      REJECT_RETURN;
-
     c->frameMetadata.clear();
     c->audioFrame.p_metadata = nullptr;
     c->status = napi_get_named_property(env, config, "metadata", &param);
     REJECT_RETURN;
     c->status = napi_typeof(env, param, &type);
+
     REJECT_RETURN;
     if (type != napi_undefined) {
       if (type != napi_string)

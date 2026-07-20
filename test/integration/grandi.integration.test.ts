@@ -269,8 +269,8 @@ describe("grandi native addon (integration)", () => {
 				sender.video({ ...frame, timecode: 1 } as never),
 			).rejects.toThrow("timecode value must be a bigint");
 			await expect(
-				sender.video({ ...frame, timestamp: 1 } as never),
-			).rejects.toThrow("timestamp value must be a bigint");
+				sender.video({ ...frame, timecode: 1 } as never),
+			).rejects.toThrow("timecode value must be a bigint");
 		} finally {
 			sender.destroy();
 		}
@@ -435,7 +435,6 @@ describe("grandi native addon (integration)", () => {
 			sender.destroy();
 		}
 	}, 120_000);
-
 
 	test("receives interleaved audio through data()", async () => {
 		const senderName = `grandi-data-audio-${Date.now()}`;

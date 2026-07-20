@@ -439,9 +439,9 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 
 | Type | Description |
 | --- | --- |
-| `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `timestamp`, `metadata`. |
+| `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `metadata`. |
 | `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"` and non-optional raw `bigint` `timecode`/`timestamp`. |
-| `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC`, optional timing/metadata. |
+| `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC`, optional `timecode`, `metadata`. |
 | `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, and raw `bigint` `timecode`/`timestamp`. |
 | `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, raw `bigint` `timecode`, `data` string). |
 | `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent`. |
