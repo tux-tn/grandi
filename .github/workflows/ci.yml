@@ -38,10 +38,10 @@ jobs:
       - name: Type check TypeScript sources
         run: npm exec -- tsc --noEmit -p tsconfig.json
 
-      - name: Check Biome formatting
+      - name: Check Oxfmt formatting
         run: npm run format
 
-      - name: Lint with Biome
+      - name: Lint with Oxlint
         run: npm run lint
 
       - name: Build package typescript sources
