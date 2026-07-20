@@ -70,7 +70,8 @@ export interface VideoFrame {
 export interface ReceivedVideoFrame extends VideoFrame {
 	type: "video";
 	timecode: bigint;
-	timestamp: bigint;
+	/** Omitted when the NDI SDK reports that the receive timestamp is unavailable. */
+	timestamp?: bigint;
 	metadata?: string;
 }
 
@@ -96,7 +97,8 @@ export interface ReceivedAudioFrame {
 	channelStrideInBytes: number;
 	data: Buffer;
 	timecode: bigint;
-	timestamp: bigint;
+	/** Omitted when the NDI SDK reports that the receive timestamp is unavailable. */
+	timestamp?: bigint;
 	metadata?: string;
 }
 
