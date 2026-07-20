@@ -157,6 +157,9 @@ bool validColorFormat(NDIlib_recv_color_format_e format);
 bool validBandwidth(NDIlib_recv_bandwidth_e bandwidth);
 bool validFrameFormat(NDIlib_frame_format_type_e format);
 bool validAudioFormat(Grandi_audio_format_e format);
+napi_status parseUint32Value(napi_env env, napi_value value,
+                             const char *valueName, uint32_t *result,
+                             std::string *error);
 
 size_t videoDataSize(const NDIlib_video_frame_v2_t &frame);
 

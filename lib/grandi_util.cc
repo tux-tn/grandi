@@ -16,8 +16,10 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cmath>
 #include <chrono>
 #include <string>
+#include <limits>
 #include <algorithm>
 #include <cstdlib>
 #include <mutex>
@@ -160,6 +162,36 @@ napi_status checkArgs(napi_env env, napi_callback_info info, char *methodName,
 
   return napi_ok;
 };
+
+napi_status parseUint32Value(napi_env env, napi_value value,
+                             const char *valueName, uint32_t *result,
+                             std::string *error) {
+  error->clear();
+  napi_valuetype type;
+  napi_status status = napi_typeof(env, value, &type);
+  if (status != napi_ok)
+    return status;
+
+  if (type != napi_number) {
+    *error = std::string(valueName) +
+             " must be a finite integer between 0 and 4294967295.";
+    return napi_ok;
+  }
+
+  double parsed;
+  status = napi_get_value_double(env, value, &parsed);
+  if (status != napi_ok)
+    return status;
+  if (!std::isfinite(parsed) || std::floor(parsed) != parsed || parsed < 0.0 ||
+      parsed > std::numeric_limits<uint32_t>::max()) {
+    *error = std::string(valueName) +
+             " must be a finite integer between 0 and 4294967295.";
+    return napi_ok;
+  }
+
+  *result = static_cast<uint32_t>(parsed);
+  return napi_ok;
+}
 
 void tidyCarrier(napi_env env, carrier *c) {
   napi_status status;
