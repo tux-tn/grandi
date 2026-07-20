@@ -77,10 +77,8 @@ function assertReceivedVideoFrame(frame: ReceivedVideoFrame) {
 	expect(typeof frame.frameRateN).toBe("number");
 	expect(typeof frame.frameRateD).toBe("number");
 	expect(Buffer.isBuffer(frame.data)).toBe(true);
-	expect(Array.isArray(frame.timecode)).toBe(true);
-	expect(Array.isArray(frame.timestamp)).toBe(true);
-	expect(frame.timecode.length).toBe(2);
-	expect(frame.timestamp.length).toBe(2);
+	expect(typeof frame.timecode).toBe("bigint");
+	expect(typeof frame.timestamp).toBe("bigint");
 }
 
 function assertTallyShape(tally: SenderTally) {
@@ -248,6 +246,35 @@ describe("grandi native addon (integration)", () => {
 		expect(Array.isArray(finder.sources())).toBe(true);
 		expect(finder.destroy()).toBe(true);
 	});
+
+	test("rejects numeric timing values", async () => {
+		const sender = await grandi.send({
+			name: `grandi-numeric-timing-${Date.now()}`,
+		});
+		const frame = {
+			type: "video" as const,
+			xres: 2,
+			yres: 2,
+			frameRateN: 30,
+			frameRateD: 1,
+			pictureAspectRatio: 1,
+			fourCC: grandi.FOURCC_BGRA,
+			frameFormatType: grandi.FrameType.Progressive,
+			lineStrideBytes: 8,
+			data: Buffer.alloc(16),
+		};
+
+		try {
+			await expect(
+				sender.video({ ...frame, timecode: 1 } as never),
+			).rejects.toThrow("timecode value must be a bigint");
+			await expect(
+				sender.video({ ...frame, timestamp: 1 } as never),
+			).rejects.toThrow("timestamp value must be a bigint");
+		} finally {
+			sender.destroy();
+		}
+	}, 30_000);
 	test("can send frames that are received locally", async () => {
 		const senderName = `grandi-vitest-${Date.now()}`;
 		const sender = await grandi.send({
@@ -312,6 +339,8 @@ describe("grandi native addon (integration)", () => {
 				throw new Error("Timed out waiting for metadata containing 'ping'");
 			expect(metadataFrame.type).toBe("metadata");
 			expect(metadataFrame.data).toContain("<test>ping</test>");
+			expect(typeof metadataFrame.timecode).toBe("bigint");
+			expect("timestamp" in metadataFrame).toBe(false);
 
 			const audioFrame = await waitForAudioFrame(receiver, {
 				sampleRate: 48_000,

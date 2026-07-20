@@ -44,8 +44,8 @@ export enum FourCC {
 	FLTp = 1884572742,
 }
 
-export type PtpTimestamp = [number, number]; // [seconds, nanoseconds]
-export type Timecode = bigint | number | PtpTimestamp;
+export const TIMECODE_SYNTHESIZE = 9223372036854775807n;
+export type Timecode = bigint;
 
 export interface Source {
 	name: string;
@@ -68,14 +68,14 @@ export interface VideoFrame {
 	 * Receive-only timestamp filled by the NDI SDK (UTC time, 100ns units under the hood).
 	 * NDI ignores this field when sending.
 	 */
-	timestamp?: PtpTimestamp;
+	timestamp?: bigint;
 	metadata?: string;
 }
 
 export interface ReceivedVideoFrame extends VideoFrame {
 	type: "video";
-	timecode: PtpTimestamp;
-	timestamp: PtpTimestamp;
+	timecode: bigint;
+	timestamp: bigint;
 	metadata?: string;
 }
 
@@ -92,7 +92,7 @@ export interface AudioFrame {
 	 * Receive-only timestamp filled by the NDI SDK (UTC time, 100ns units under the hood).
 	 * NDI ignores this field when sending.
 	 */
-	timestamp?: PtpTimestamp;
+	timestamp?: bigint;
 	metadata?: string;
 }
 
@@ -105,16 +105,15 @@ export interface ReceivedAudioFrame {
 	samples: number;
 	channelStrideInBytes: number;
 	data: Buffer;
-	timecode: PtpTimestamp;
-	timestamp: PtpTimestamp;
+	timecode: bigint;
+	timestamp: bigint;
 	metadata?: string;
 }
 
 export interface ReceivedMetadataFrame {
 	type: "metadata";
 	length: number;
-	timecode: PtpTimestamp;
-	timestamp: PtpTimestamp;
+	timecode: bigint;
 	data: string;
 }
 
@@ -403,6 +402,10 @@ export interface Grandi {
 	 * Enum: FourCC pixel/audio formats used in frames.
 	 */
 	FourCC: typeof FourCC;
+	/**
+	 * NDI sentinel that asks the SDK to synthesize the timecode.
+	 */
+	TIMECODE_SYNTHESIZE: bigint;
 
 	// Constant aliases for backwards compatibility / convenience.
 	/**

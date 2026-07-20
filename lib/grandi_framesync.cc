@@ -402,10 +402,6 @@ void framesyncVideoComplete(napi_env env, napi_status asyncStatus, void *data) {
     return;
   }
 
-  int32_t ptps, ptpn;
-  ptps = (int32_t)(c->videoFrame.timestamp / 10000000);
-  ptpn = (c->videoFrame.timestamp % 10000000) * 100;
-
   napi_value param;
   c->status = napi_create_string_utf8(env, "video", NAPI_AUTO_LENGTH, &param);
   REJECT_STATUS;
@@ -438,16 +434,7 @@ void framesyncVideoComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "pictureAspectRatio", param);
   REJECT_STATUS;
 
-  napi_value params, paramn;
-  c->status = napi_create_int32(env, ptps, &params);
-  REJECT_STATUS;
-  c->status = napi_create_int32(env, ptpn, &paramn);
-  REJECT_STATUS;
-  c->status = napi_create_array(env, &param);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 0, params);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 1, paramn);
+  c->status = napi_create_bigint_int64(env, c->videoFrame.timestamp, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "timestamp", param);
   REJECT_STATUS;
@@ -462,17 +449,7 @@ void framesyncVideoComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "frameFormatType", param);
   REJECT_STATUS;
 
-  c->status = napi_create_int32(env, (int32_t)c->videoFrame.timecode / 10000000,
-                                &params);
-  REJECT_STATUS;
-  c->status = napi_create_int32(env, (c->videoFrame.timecode % 10000000) * 100,
-                                &paramn);
-  REJECT_STATUS;
-  c->status = napi_create_array(env, &param);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 0, params);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 1, paramn);
+  c->status = napi_create_bigint_int64(env, c->videoFrame.timecode, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "timecode", param);
   REJECT_STATUS;
@@ -578,10 +555,6 @@ void framesyncAudioComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_create_object(env, &result);
   REJECT_STATUS;
 
-  int32_t ptps, ptpn;
-  ptps = (int32_t)(c->audioFrame.timestamp / 10000000);
-  ptpn = (c->audioFrame.timestamp % 10000000) * 100;
-
   napi_value param;
   c->status = napi_create_string_utf8(env, "audio", NAPI_AUTO_LENGTH, &param);
   REJECT_STATUS;
@@ -616,31 +589,12 @@ void framesyncAudioComplete(napi_env env, napi_status asyncStatus, void *data) {
       napi_set_named_property(env, result, "channelStrideInBytes", param);
   REJECT_STATUS;
 
-  napi_value params, paramn;
-  c->status = napi_create_int32(env, ptps, &params);
-  REJECT_STATUS;
-  c->status = napi_create_int32(env, ptpn, &paramn);
-  REJECT_STATUS;
-  c->status = napi_create_array(env, &param);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 0, params);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 1, paramn);
+  c->status = napi_create_bigint_int64(env, c->audioFrame.timestamp, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "timestamp", param);
   REJECT_STATUS;
 
-  c->status = napi_create_int32(env, (int32_t)c->audioFrame.timecode / 10000000,
-                                &params);
-  REJECT_STATUS;
-  c->status = napi_create_int32(env, (c->audioFrame.timecode % 10000000) * 100,
-                                &paramn);
-  REJECT_STATUS;
-  c->status = napi_create_array(env, &param);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 0, params);
-  REJECT_STATUS;
-  c->status = napi_set_element(env, param, 1, paramn);
+  c->status = napi_create_bigint_int64(env, c->audioFrame.timecode, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "timecode", param);
   REJECT_STATUS;

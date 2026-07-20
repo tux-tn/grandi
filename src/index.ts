@@ -18,6 +18,7 @@ import {
 	ColorFormat,
 	FourCC,
 	FrameType,
+	TIMECODE_SYNTHESIZE,
 } from "./types";
 
 /**
@@ -274,8 +275,15 @@ export const framesync = addon.framesync;
  */
 export const routing = addon.routing;
 
-// Re-export enums and types for convenient named imports
-export { ColorFormat, AudioFormat, Bandwidth, FrameType, FourCC };
+// Re-export enums and timing constants for convenient named imports
+export {
+	AudioFormat,
+	Bandwidth,
+	ColorFormat,
+	FourCC,
+	FrameType,
+	TIMECODE_SYNTHESIZE,
+};
 export type {
 	AudioFrame,
 	AudioReceiveOptions,
@@ -284,7 +292,6 @@ export type {
 	FrameSync,
 	FrameSyncAudioOptions,
 	Grandi,
-	PtpTimestamp,
 	ReceivedAudioFrame,
 	ReceivedMetadataFrame,
 	ReceivedVideoFrame,
@@ -317,8 +324,7 @@ const grandi: Grandi = {
 	Bandwidth,
 	FrameType,
 	FourCC,
-
-	// Constants mapped to enum values
+	TIMECODE_SYNTHESIZE,
 	COLOR_FORMAT_BGRX_BGRA: ColorFormat.BGRX_BGRA,
 	COLOR_FORMAT_UYVY_BGRA: ColorFormat.UYVY_BGRA,
 	COLOR_FORMAT_RGBX_RGBA: ColorFormat.RGBX_RGBA,

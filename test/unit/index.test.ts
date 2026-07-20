@@ -157,6 +157,8 @@ describe("src/index entrypoint", () => {
 		expect(grandi.FORMAT_TYPE_PROGRESSIVE).toBe(
 			grandiModule.FrameType.Progressive,
 		);
+		expect(grandi.TIMECODE_SYNTHESIZE).toBe(9223372036854775807n);
+		expect(grandiModule.TIMECODE_SYNTHESIZE).toBe(grandi.TIMECODE_SYNTHESIZE);
 	});
 
 	it("returns the mocked addon APIs on win32 arm", async () => {
