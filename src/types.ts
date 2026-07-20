@@ -331,9 +331,10 @@ export interface Grandi {
 	 */
 	isSupportedCPU(): boolean;
 	/**
-	 * Initializes the NDI library. Must be called before using any other NDI functions.
-	 * Call this once per process, before creating senders/receivers/finders.
-	 * @returns `true` if initialization was successful.
+	 * Optionally initializes the process-global NDI library.
+	 * The SDK does not require this call, but eager initialization is recommended
+	 * when the application explicitly manages startup and shutdown.
+	 * @returns `true` if initialization succeeded and the CPU is supported.
 	 *
 	 * @example
 	 * ```js
@@ -343,9 +344,9 @@ export interface Grandi {
 	 */
 	initialize(): boolean;
 	/**
-	 * Destroys the NDI library instance and cleans up resources.
-	 * Should be called when done using NDI to free resources.
-	 * @returns `true` if destruction was successful.
+	 * Optionally shuts down the process-global NDI library.
+	 * When managing the lifecycle explicitly, destroy all native objects first.
+	 * @returns `true` after requesting shutdown.
 	 *
 	 * @example
 	 * ```js

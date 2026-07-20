@@ -70,6 +70,11 @@ This module allows a Node.js program to find, receive, and send NDI™ video, au
 
 If you want to run Grandi with [Electron](https://www.electronjs.org/), see the [Electron NDI viewer example app](https://github.com/tux-tn/electron-ndi-viewer).
 
+### Library lifecycle
+Explicit NDI library initialization is optional. The SDK can manage its process-global state without `grandi.initialize()` or `grandi.destroy()`, and Grandi's `find`, `send`, `receive`, `framesync`, and `routing` functions do not call `initialize()` automatically.
+
+For long-running applications and command-line programs, calling `initialize()` once is still recommended: it starts the NDI libraries eagerly and reports unsupported CPUs through its `false` return value. If you opt into explicit lifecycle management, destroy every finder, sender, receiver, frame-sync, and router before calling `grandi.destroy()` once during shutdown. The runnable examples follow this policy.
+
 ### Finding streams
 `grandi.find` resolves to a finder handle that can block for network updates and expose the discovered sources:
 
@@ -302,7 +307,7 @@ Destroy senders and receivers explicitly when finished to release NDI resources.
 ### Other helpers
 - `grandi.version()` returns the NDI SDK version string (e.g. `NDI SDK LINUX 10:24:11 Aug 21 2025 6.2.1.0`).
 - `grandi.isSupportedCPU()` checks whether the host CPU can run the NDI SDK.
-- `grandi.initialize()` / `grandi.destroy()` control the lifetime of the underlying library in advanced scenarios.
+- `grandi.initialize()` / `grandi.destroy()` optionally manage the process-global NDI library lifecycle; native objects must be destroyed first when using them.
 
 ## Benchmark
 A loopback benchmark script measures end-to-end send/receive throughput and latency on your machine. It spins up a sender and receiver locally, so a working NDI setup with discovery is required.
@@ -372,7 +377,7 @@ This section documents every exported method and type surfaced by the module. Re
 | `receive(options: ReceiveOptions)` | `Promise<Receiver>` | Create a receiver bound to a specific `Source` with optional color format, bandwidth, interlaced, and naming tweaks. |
 | `send(options: SendOptions)` | `Promise<Sender>` | Create a sender that can push video, audio, metadata, and tally updates into the NDI network. |
 | `routing(params: { name?: string; groups?: string })` | `Promise<Routing>` | Build an NDI router that can switch downstream destinations to new sources via `routing.change`. |
-| `initialize()` / `destroy()` | `boolean` | Manually initialize or tear down the shared NDI state; normally handled automatically by `send`/`receive`. |
+| `initialize()` / `destroy()` | `boolean` | Optionally start or stop the process-global NDI library. Constructors do not call `initialize()` automatically. |
 | `version()` | `string` | Report the bundled NDI SDK version. |
 | `isSupportedCPU()` | `boolean` | Guard call to confirm the host CPU meets the NDI SDK requirements. |
 | `ColorFormat`, `AudioFormat`, `Bandwidth`, `FrameType`, `FourCC` | enums | Runtime enumerations re-exported for convenience. `VideoFourCC` and `AudioFourCC` narrow the valid frame formats at compile time. |
