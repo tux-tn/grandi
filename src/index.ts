@@ -285,6 +285,7 @@ export {
 	TIMECODE_SYNTHESIZE,
 };
 export type {
+	AudioFourCC,
 	AudioFrame,
 	AudioReceiveOptions,
 	Finder,
@@ -307,6 +308,7 @@ export type {
 	StatusChangeEvent,
 	Timecode,
 	TimeoutEvent,
+	VideoFourCC,
 	VideoFrame,
 } from "./types";
 

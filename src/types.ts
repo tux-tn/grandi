@@ -44,6 +44,21 @@ export enum FourCC {
 	FLTp = 1884572742,
 }
 
+export type VideoFourCC =
+	| FourCC.UYVY
+	| FourCC.UYVA
+	| FourCC.P216
+	| FourCC.PA16
+	| FourCC.YV12
+	| FourCC.I420
+	| FourCC.NV12
+	| FourCC.BGRA
+	| FourCC.BGRX
+	| FourCC.RGBA
+	| FourCC.RGBX;
+
+export type AudioFourCC = FourCC.FLTp;
+
 export const TIMECODE_SYNTHESIZE = 9223372036854775807n;
 export type Timecode = bigint;
 
@@ -59,7 +74,7 @@ export interface VideoFrame {
 	frameRateN: number;
 	frameRateD: number;
 	pictureAspectRatio: number;
-	fourCC: FourCC;
+	fourCC: VideoFourCC;
 	frameFormatType: FrameType;
 	lineStrideBytes: number;
 	data: Buffer;
@@ -82,7 +97,7 @@ export interface AudioFrame {
 	noSamples: number;
 	channelStrideBytes: number;
 	data: Buffer;
-	fourCC: FourCC;
+	fourCC: AudioFourCC;
 	timecode?: Timecode;
 	metadata?: string;
 }
@@ -506,49 +521,49 @@ export interface Grandi {
 	/**
 	 * Alias of `FourCC.UYVY`.
 	 */
-	FOURCC_UYVY: FourCC;
+	FOURCC_UYVY: VideoFourCC;
 	/**
 	 * Alias of `FourCC.UYVA`.
 	 */
-	FOURCC_UYVA: FourCC;
+	FOURCC_UYVA: VideoFourCC;
 	/**
 	 * Alias of `FourCC.P216`.
 	 */
-	FOURCC_P216: FourCC;
+	FOURCC_P216: VideoFourCC;
 	/**
 	 * Alias of `FourCC.PA16`.
 	 */
-	FOURCC_PA16: FourCC;
+	FOURCC_PA16: VideoFourCC;
 	/**
 	 * Alias of `FourCC.YV12`.
 	 */
-	FOURCC_YV12: FourCC;
+	FOURCC_YV12: VideoFourCC;
 	/**
 	 * Alias of `FourCC.I420`.
 	 */
-	FOURCC_I420: FourCC;
+	FOURCC_I420: VideoFourCC;
 	/**
 	 * Alias of `FourCC.NV12`.
 	 */
-	FOURCC_NV12: FourCC;
+	FOURCC_NV12: VideoFourCC;
 	/**
 	 * Alias of `FourCC.BGRA`.
 	 */
-	FOURCC_BGRA: FourCC;
+	FOURCC_BGRA: VideoFourCC;
 	/**
 	 * Alias of `FourCC.BGRX`.
 	 */
-	FOURCC_BGRX: FourCC;
+	FOURCC_BGRX: VideoFourCC;
 	/**
 	 * Alias of `FourCC.RGBA`.
 	 */
-	FOURCC_RGBA: FourCC;
+	FOURCC_RGBA: VideoFourCC;
 	/**
 	 * Alias of `FourCC.RGBX`.
 	 */
-	FOURCC_RGBX: FourCC;
+	FOURCC_RGBX: VideoFourCC;
 	/**
 	 * Alias of `FourCC.FLTp`.
 	 */
-	FOURCC_FLTp: FourCC;
+	FOURCC_FLTp: AudioFourCC;
 }
