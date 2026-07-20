@@ -375,7 +375,7 @@ This section documents every exported method and type surfaced by the module. Re
 | `initialize()` / `destroy()` | `boolean` | Manually initialize or tear down the shared NDI state; normally handled automatically by `send`/`receive`. |
 | `version()` | `string` | Report the bundled NDI SDK version. |
 | `isSupportedCPU()` | `boolean` | Guard call to confirm the host CPU meets the NDI SDK requirements. |
-| `ColorFormat`, `AudioFormat`, `Bandwidth`, `FrameType`, `FourCC` | enums | Enumerations re-exported for convenience (also mirrored as constants on the default export). |
+| `ColorFormat`, `AudioFormat`, `Bandwidth`, `FrameType`, `FourCC` | enums | Runtime enumerations re-exported for convenience. `VideoFourCC` and `AudioFourCC` narrow the valid frame formats at compile time. |
 | `default` | `typeof grandi` | The `grandi` object containing the methods above plus constant aliases such as `COLOR_FORMAT_FASTEST`, `BANDWIDTH_HIGHEST`, etc. |
 
 ### Receiver interface
@@ -443,9 +443,9 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 
 | Type | Description |
 | --- | --- |
-| `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `metadata`. |
+| `VideoFrame` | Outbound frame with resolution, frame rate (`frameRateN`/`frameRateD`), aspect ratio, `fourCC: VideoFourCC`, `frameFormatType`, `lineStrideBytes`, `data`, optional `timecode`, `metadata`. |
 | `ReceivedVideoFrame` | `VideoFrame` plus `type: "video"`, a raw `bigint` `timecode`, and an optional raw `bigint` receive `timestamp`. |
-| `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC`, optional `timecode`, `metadata`. |
+| `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC: AudioFourCC`, optional `timecode`, `metadata`. |
 | `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, raw `bigint` `timecode`, and an optional raw `bigint` receive `timestamp`. |
 | `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, raw `bigint` `timecode`, `data` string). |
 | `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent`. |
@@ -456,7 +456,7 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 - `AudioFormat` — `Float32Separate`, `Float32Interleaved`, `Int16Interleaved`. Access via `grandi.AUDIO_FORMAT_*`.
 - `Bandwidth` — `MetadataOnly`, `AudioOnly`, `Lowest`, `Highest`. Access via `grandi.BANDWIDTH_*`.
 - `FrameType` — `Interlaced`, `Progressive`, `Field0`, `Field1`. Access via `grandi.FORMAT_TYPE_*`.
-- `FourCC` — common pixel/audio format codes (`UYVY`, `UYVA`, `P216`, `PA16`, `YV12`, `I420`, `NV12`, `BGRA`, `BGRX`, `RGBA`, `RGBX`, `FLTp`). Helper constants exist on the default export.
+- `FourCC` — runtime format constants. `VideoFourCC` contains the supported video codes (`UYVY`, `UYVA`, `P216`, `PA16`, `YV12`, `I420`, `NV12`, `BGRA`, `BGRX`, `RGBA`, `RGBX`); `AudioFourCC` currently contains only planar float audio (`FLTp`).
 
 ## Status, support, and further development
 Support for sending and receiving streams across Windows, macOS, and Linux platforms is actively maintained. Contributions are welcome via pull requests, and enhancements or bug reports can be filed as GitHub issues.
