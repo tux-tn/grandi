@@ -48,7 +48,6 @@ async function main() {
 					yres: HEIGHT,
 					frameRateN: FPS_N,
 					frameRateD: FPS_D,
-					colorFormat: grandi.ColorFormat.Fastest,
 					pictureAspectRatio: WIDTH / HEIGHT,
 					frameFormatType: grandi.FrameType.Progressive,
 					lineStrideBytes: WIDTH * 4,
