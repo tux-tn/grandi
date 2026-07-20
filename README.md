@@ -388,6 +388,9 @@ This section documents every exported method and type surfaced by the module. Re
 | `metadata(timeoutMs?: number)` | `Promise<ReceivedMetadataFrame>` | Receive metadata frames (XML strings). |
 | `data(optionsOrTimeout?: AudioReceiveOptions \| number, timeoutMs?: number)` | `Promise<ReceiverDataFrame>` | Return whichever payload (video/audio/metadata/source change/status change) arrives first. |
 | `tally(state: ReceiverTallyState)` | `boolean` | Push tally states (program/preview) upstream to the sender. |
+| `performance()` | `ReceiverPerformance` | Return total and dropped frame counts (video/audio/metadata) since connection. |
+| `queue()` | `ReceiverQueue` | Report the current receiver queue depth per frame type. |
+| `connections()` | `number` | Return the number of active NDI connections (0 or 1). |
 | `destroy()` | `boolean` | Release the underlying NDI receiver resources. |
 
 Properties: `embedded`, `source`, `colorFormat`, `bandwidth`, `allowVideoFields`, `name`.
@@ -435,6 +438,8 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 | `SendOptions` | `{ name: string; groups?: string; clockVideo?: boolean; clockAudio?: boolean; }` | Configure sender identity and sync behavior. |
 | `AudioReceiveOptions` | `{ audioFormat?: AudioFormat; referenceLevel?: number; }` | Used when calling `receiver.audio` or `receiver.data`. |
 | `ReceiverTallyState` | `{ onProgram?: boolean; onPreview?: boolean; }` | Provided to `receiver.tally` to reflect monitoring state. |
+| `ReceiverPerformance` | `{ total: { videoFrames, audioFrames, metadataFrames }, dropped: { videoFrames, audioFrames, metadataFrames } }` | Returned by `receiver.performance()`. |
+| `ReceiverQueue` | `{ videoFrames, audioFrames, metadataFrames }` | Returned by `receiver.queue()`. |
 | `SenderTally` | `{ changed: boolean; on_program: boolean; on_preview: boolean; }` | Returned by `sender.tally`. |
 | `Timecode` | `bigint` | NDI timecode in 100-nanosecond units. Use `bigint` to preserve the full signed 64-bit value. Received timecodes remain raw `bigint` values. |
 | `TIMECODE_SYNTHESIZE` | `bigint` (`9223372036854775807n`) | NDI sentinel equivalent to `NDIlib_send_timecode_synthesize`; asks NDI to synthesize a timecode. This is the default when `timecode` is omitted. |

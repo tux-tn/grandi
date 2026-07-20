@@ -449,6 +449,29 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_set_named_property(env, result, "tally", tallyFn);
   REJECT_STATUS;
 
+  napi_value performanceFn;
+  c->status = napi_create_function(env, "performance", NAPI_AUTO_LENGTH,
+                                   recvPerformance, nullptr, &performanceFn);
+  REJECT_STATUS;
+  c->status =
+      napi_set_named_property(env, result, "performance", performanceFn);
+  REJECT_STATUS;
+
+  napi_value queueFn;
+  c->status = napi_create_function(env, "queue", NAPI_AUTO_LENGTH, recvQueue,
+                                   nullptr, &queueFn);
+  REJECT_STATUS;
+  c->status = napi_set_named_property(env, result, "queue", queueFn);
+  REJECT_STATUS;
+
+  napi_value connectionsFn;
+  c->status = napi_create_function(env, "connections", NAPI_AUTO_LENGTH,
+                                   recvConnections, nullptr, &connectionsFn);
+  REJECT_STATUS;
+  c->status =
+      napi_set_named_property(env, result, "connections", connectionsFn);
+  REJECT_STATUS;
+
   napi_value source, name;
   c->status = napi_create_string_utf8(env, c->source->p_ndi_name,
                                       NAPI_AUTO_LENGTH, &name);
@@ -761,6 +784,142 @@ void videoReceiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   FLOATING_STATUS;
 
   tidyCarrier(env, c);
+}
+
+napi_value recvPerformance(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value thisValue;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &thisValue, nullptr);
+  CHECK_STATUS;
+
+  napi_value embedded;
+  status = napi_get_named_property(env, thisValue, "embedded", &embedded);
+  CHECK_STATUS;
+  void *recvData;
+  status = napi_get_value_external(env, embedded, &recvData);
+  CHECK_STATUS;
+  nativeHandle *handle = (nativeHandle *)recvData;
+  void *recvInstance;
+  if (!acquireNativeHandle(handle, &recvInstance))
+    NAPI_THROW_ERROR("Receiver has been destroyed.");
+  NDIlib_recv_instance_t recv = (NDIlib_recv_instance_t)recvInstance;
+
+  NDIlib_recv_performance_t total{};
+  NDIlib_recv_performance_t dropped{};
+  NDIlib_recv_get_performance(recv, &total, &dropped);
+  releaseNativeHandle(handle);
+
+  napi_value result, totalObj, droppedObj, value;
+  status = napi_create_object(env, &result);
+  CHECK_STATUS;
+
+  status = napi_create_object(env, &totalObj);
+  CHECK_STATUS;
+  status = napi_create_int64(env, total.video_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, totalObj, "videoFrames", value);
+  CHECK_STATUS;
+  status = napi_create_int64(env, total.audio_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, totalObj, "audioFrames", value);
+  CHECK_STATUS;
+  status = napi_create_int64(env, total.metadata_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, totalObj, "metadataFrames", value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "total", totalObj);
+  CHECK_STATUS;
+
+  status = napi_create_object(env, &droppedObj);
+  CHECK_STATUS;
+  status = napi_create_int64(env, dropped.video_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, droppedObj, "videoFrames", value);
+  CHECK_STATUS;
+  status = napi_create_int64(env, dropped.audio_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, droppedObj, "audioFrames", value);
+  CHECK_STATUS;
+  status = napi_create_int64(env, dropped.metadata_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, droppedObj, "metadataFrames", value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "dropped", droppedObj);
+  CHECK_STATUS;
+
+  return result;
+}
+
+napi_value recvQueue(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value thisValue;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &thisValue, nullptr);
+  CHECK_STATUS;
+
+  napi_value embedded;
+  status = napi_get_named_property(env, thisValue, "embedded", &embedded);
+  CHECK_STATUS;
+  void *recvData;
+  status = napi_get_value_external(env, embedded, &recvData);
+  CHECK_STATUS;
+  nativeHandle *handle = (nativeHandle *)recvData;
+  void *recvInstance;
+  if (!acquireNativeHandle(handle, &recvInstance))
+    NAPI_THROW_ERROR("Receiver has been destroyed.");
+  NDIlib_recv_instance_t recv = (NDIlib_recv_instance_t)recvInstance;
+
+  NDIlib_recv_queue_t total{};
+  NDIlib_recv_get_queue(recv, &total);
+  releaseNativeHandle(handle);
+
+  napi_value result, value;
+  status = napi_create_object(env, &result);
+  CHECK_STATUS;
+
+  status = napi_create_int32(env, total.video_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "videoFrames", value);
+  CHECK_STATUS;
+  status = napi_create_int32(env, total.audio_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "audioFrames", value);
+  CHECK_STATUS;
+  status = napi_create_int32(env, total.metadata_frames, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "metadataFrames", value);
+  CHECK_STATUS;
+
+  return result;
+}
+
+napi_value recvConnections(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  napi_value thisValue;
+  status = napi_get_cb_info(env, info, nullptr, nullptr, &thisValue, nullptr);
+  CHECK_STATUS;
+
+  napi_value embedded;
+  status = napi_get_named_property(env, thisValue, "embedded", &embedded);
+  CHECK_STATUS;
+  void *recvData;
+  status = napi_get_value_external(env, embedded, &recvData);
+  CHECK_STATUS;
+  nativeHandle *handle = (nativeHandle *)recvData;
+  void *recvInstance;
+  if (!acquireNativeHandle(handle, &recvInstance))
+    NAPI_THROW_ERROR("Receiver has been destroyed.");
+  NDIlib_recv_instance_t recv = (NDIlib_recv_instance_t)recvInstance;
+
+  int count = NDIlib_recv_get_no_connections(recv);
+  releaseNativeHandle(handle);
+
+  napi_value result;
+  status = napi_create_int32(env, count, &result);
+  CHECK_STATUS;
+  return result;
 }
 
 napi_value setReceiveTally(napi_env env, napi_callback_info info) {

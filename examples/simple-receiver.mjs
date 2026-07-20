@@ -62,6 +62,13 @@ async function main() {
 					console.log("Receiver event", frame.type);
 					break;
 			}
+			if ((frameIdx + 1) % 30 === 0) {
+				console.log("Receiver observability", {
+					connections: receiver.connections(),
+					queue: receiver.queue(),
+					performance: receiver.performance(),
+				});
+			}
 		}
 	} finally {
 		grandi.destroy();

@@ -149,6 +149,17 @@ export interface AudioReceiveOptions {
 	referenceLevel?: number;
 }
 
+export interface ReceiverPerformance {
+	total: { videoFrames: number; audioFrames: number; metadataFrames: number };
+	dropped: { videoFrames: number; audioFrames: number; metadataFrames: number };
+}
+
+export interface ReceiverQueue {
+	videoFrames: number;
+	audioFrames: number;
+	metadataFrames: number;
+}
+
 export interface Receiver {
 	embedded: unknown;
 	source: Source;
@@ -170,6 +181,9 @@ export interface Receiver {
 	): Promise<ReceiverDataFrame>;
 	tally(state: ReceiverTallyState): boolean;
 	destroy(): boolean;
+	performance(): ReceiverPerformance;
+	queue(): ReceiverQueue;
+	connections(): number;
 }
 
 export interface ReceiverTallyState {
