@@ -282,6 +282,51 @@ napi_value audioQueueDepth(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
   return result;
 }
+napi_value audioFormat(napi_env env, napi_callback_info info) {
+  napi_status status;
+
+  size_t argc = 0;
+  napi_value thisValue;
+  status = napi_get_cb_info(env, info, &argc, nullptr, &thisValue, nullptr);
+  CHECK_STATUS;
+
+  carrier c;
+  framesyncWrapper *wrapper = nullptr;
+  if (!acquireFrameSyncFromThis(env, thisValue, &wrapper, &c)) {
+    napi_throw_error(env, nullptr,
+                     c.errorMsg.empty() ? "FrameSync has been destroyed."
+                                        : c.errorMsg.c_str());
+    return nullptr;
+  }
+
+  NDIlib_audio_frame_v3_t frame{};
+  NDIlib_framesync_capture_audio_v2(wrapper->fs, &frame, 0, 0, 0);
+  int sampleRate = frame.sample_rate;
+  int noChannels = frame.no_channels;
+  NDIlib_framesync_free_audio_v2(wrapper->fs, &frame);
+  releaseFrameSyncWrapper(wrapper);
+
+  napi_value result;
+  if (sampleRate <= 0 || noChannels <= 0) {
+    status = napi_get_undefined(env, &result);
+    CHECK_STATUS;
+    return result;
+  }
+
+  status = napi_create_object(env, &result);
+  CHECK_STATUS;
+  napi_value value;
+  status = napi_create_int32(env, sampleRate, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "sampleRate", value);
+  CHECK_STATUS;
+  status = napi_create_int32(env, noChannels, &value);
+  CHECK_STATUS;
+  status = napi_set_named_property(env, result, "noChannels", value);
+  CHECK_STATUS;
+  return result;
+}
+
 
 void framesyncExecute(napi_env env, void *data) {
   framesyncCarrier *c = (framesyncCarrier *)data;
@@ -348,6 +393,14 @@ void framesyncComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "audio", audioFn);
   REJECT_STATUS;
+  napi_value audioFormatFn;
+  c->status = napi_create_function(env, "audioFormat", NAPI_AUTO_LENGTH,
+                                   audioFormat, nullptr, &audioFormatFn);
+  REJECT_STATUS;
+  c->status =
+      napi_set_named_property(env, result, "audioFormat", audioFormatFn);
+  REJECT_STATUS;
+
 
   napi_value audioQueueDepthFn;
   c->status =
@@ -643,57 +696,54 @@ napi_value framesyncAudio(napi_env env, napi_callback_info info) {
   if (!acquireFrameSyncFromThis(env, thisValue, &c->wrapper, c))
     REJECT_RETURN;
 
-  if (argc >= 1) {
-    napi_value options = args[0];
-    c->status = napi_typeof(env, options, &type);
+  if (argc < 1)
+    REJECT_ERROR_RETURN("options must be provided.", GRANDI_INVALID_ARGS);
+
+  napi_value options = args[0];
+  c->status = napi_typeof(env, options, &type);
+  REJECT_RETURN;
+  if (type != napi_object)
+    REJECT_ERROR_RETURN("options must be an object.", GRANDI_INVALID_ARGS);
+
+  napi_value sampleRateValue;
+  c->status =
+      napi_get_named_property(env, options, "sampleRate", &sampleRateValue);
+  REJECT_RETURN;
+  c->status = napi_typeof(env, sampleRateValue, &type);
+  REJECT_RETURN;
+  if (type != napi_undefined) {
+    if (type != napi_number)
+      REJECT_ERROR_RETURN("sampleRate must be a number.", GRANDI_INVALID_ARGS);
+    c->status = napi_get_value_int32(env, sampleRateValue, &c->sampleRate);
     REJECT_RETURN;
-    if (type != napi_undefined) {
-      if (type != napi_object)
-        REJECT_ERROR_RETURN("options must be an object.", GRANDI_INVALID_ARGS);
-
-      napi_value sampleRateValue;
-      c->status =
-          napi_get_named_property(env, options, "sampleRate", &sampleRateValue);
-      REJECT_RETURN;
-      c->status = napi_typeof(env, sampleRateValue, &type);
-      REJECT_RETURN;
-      if (type != napi_undefined) {
-        if (type != napi_number)
-          REJECT_ERROR_RETURN("sampleRate must be a number.",
-                              GRANDI_INVALID_ARGS);
-        c->status = napi_get_value_int32(env, sampleRateValue, &c->sampleRate);
-        REJECT_RETURN;
-      }
-
-      napi_value channelsValue;
-      c->status =
-          napi_get_named_property(env, options, "noChannels", &channelsValue);
-      REJECT_RETURN;
-      c->status = napi_typeof(env, channelsValue, &type);
-      REJECT_RETURN;
-      if (type != napi_undefined) {
-        if (type != napi_number)
-          REJECT_ERROR_RETURN("noChannels must be a number.",
-                              GRANDI_INVALID_ARGS);
-        c->status = napi_get_value_int32(env, channelsValue, &c->noChannels);
-        REJECT_RETURN;
-      }
-
-      napi_value samplesValue;
-      c->status =
-          napi_get_named_property(env, options, "noSamples", &samplesValue);
-      REJECT_RETURN;
-      c->status = napi_typeof(env, samplesValue, &type);
-      REJECT_RETURN;
-      if (type != napi_undefined) {
-        if (type != napi_number)
-          REJECT_ERROR_RETURN("noSamples must be a number.",
-                              GRANDI_INVALID_ARGS);
-        c->status = napi_get_value_int32(env, samplesValue, &c->noSamples);
-        REJECT_RETURN;
-      }
-    }
   }
+
+  napi_value channelsValue;
+  c->status =
+      napi_get_named_property(env, options, "noChannels", &channelsValue);
+  REJECT_RETURN;
+  c->status = napi_typeof(env, channelsValue, &type);
+  REJECT_RETURN;
+  if (type != napi_undefined) {
+    if (type != napi_number)
+      REJECT_ERROR_RETURN("noChannels must be a number.", GRANDI_INVALID_ARGS);
+    c->status = napi_get_value_int32(env, channelsValue, &c->noChannels);
+    REJECT_RETURN;
+  }
+
+  napi_value samplesValue;
+  c->status =
+      napi_get_named_property(env, options, "noSamples", &samplesValue);
+  REJECT_RETURN;
+  c->status = napi_typeof(env, samplesValue, &type);
+  REJECT_RETURN;
+  if (type != napi_number)
+    REJECT_ERROR_RETURN("noSamples must be a number.", GRANDI_INVALID_ARGS);
+  c->status = napi_get_value_int32(env, samplesValue, &c->noSamples);
+  REJECT_RETURN;
+  if (c->noSamples <= 0)
+    REJECT_ERROR_RETURN("noSamples must be greater than zero.",
+                        GRANDI_INVALID_ARGS);
 
   napi_value resource_name;
   c->status = napi_create_string_utf8(env, "FrameSyncAudio", NAPI_AUTO_LENGTH,

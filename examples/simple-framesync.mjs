@@ -5,7 +5,7 @@ import grandi from "grandi";
 const FPS = 30;
 const AUDIO_OPTIONS = {
 	sampleRate: 48_000,
-	channels: 2,
+	noChannels: 2,
 	noSamples: 1_600, // sampleRate / FPS = 48,000 / 30 = 1,600 samples per frame (in framesync mode, this is the number of samples to pull per frame)
 };
 
@@ -70,8 +70,6 @@ async function main() {
 						`audio=${audio.samples} samples, ` +
 						`audioQueue=${frameSync.audioQueueDepth()} samples`,
 				);
-				console.log(video.timecode, audio.timecode);
-				console.log(video.timestamp, audio.timestamp);
 			}
 
 			nextPull += frameIntervalMs;
