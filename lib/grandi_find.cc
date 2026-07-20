@@ -354,9 +354,12 @@ napi_value find_wait(napi_env env, napi_callback_info info) {
     napi_valuetype type;
     status = napi_typeof(env, args[0], &type);
     CHECK_STATUS;
-    if (type == napi_number) {
-      status = napi_get_value_uint32(env, args[0], &wait);
+    if (type != napi_undefined) {
+      std::string error;
+      status = parseUint32Value(env, args[0], "timeoutMs", &wait, &error);
       CHECK_STATUS;
+      if (!error.empty())
+        NAPI_THROW_ERROR(error.c_str());
     }
   }
 

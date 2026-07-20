@@ -244,6 +244,11 @@ describe("grandi native addon (integration)", () => {
 			extraIPs: "127.0.0.1",
 		});
 		expect(typeof finder.wait(50)).toBe("boolean");
+		const timeoutError =
+			"timeoutMs must be a finite integer between 0 and 4294967295.";
+		expect(() => finder.wait(-1)).toThrow(timeoutError);
+		expect(() => finder.wait(1.5)).toThrow(timeoutError);
+		expect(() => finder.wait("50" as never)).toThrow(timeoutError);
 		expect(Array.isArray(finder.sources())).toBe(true);
 		expect(finder.destroy()).toBe(true);
 	});
@@ -269,9 +274,6 @@ describe("grandi native addon (integration)", () => {
 			await expect(
 				sender.video({ ...frame, timecode: 1 } as never),
 			).rejects.toThrow("timecode value must be a bigint");
-			await expect(
-				sender.video({ ...frame, timecode: 1 } as never),
-			).rejects.toThrow("timecode value must be a bigint");
 		} finally {
 			sender.destroy();
 		}
@@ -294,6 +296,15 @@ describe("grandi native addon (integration)", () => {
 				name: `${senderName}-receiver`,
 				colorFormat: grandi.ColorFormat.BGRX_BGRA,
 			});
+			const timeoutError =
+				"timeoutMs must be a finite integer between 0 and 4294967295.";
+			await expect(receiver.video(-1)).rejects.toThrow(timeoutError);
+			await expect(receiver.video("50" as never)).rejects.toThrow(timeoutError);
+			await expect(receiver.audio(Number.NaN)).rejects.toThrow(timeoutError);
+			await expect(receiver.metadata(1.5)).rejects.toThrow(timeoutError);
+			await expect(receiver.data({}, Number.POSITIVE_INFINITY)).rejects.toThrow(
+				timeoutError,
+			);
 			const frame = await waitForVideoFrameSize(
 				receiver,
 				{ xres: 64, yres: 36 },

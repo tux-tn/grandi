@@ -92,6 +92,23 @@ uint32_t remainingWaitMs(uint32_t initialWait,
     return 0;
   return initialWait - static_cast<uint32_t>(elapsed);
 }
+bool parseOptionalTimeout(napi_env env, napi_value value, dataCarrier *c) {
+  napi_valuetype type;
+  c->status = napi_typeof(env, value, &type);
+  if (c->status != napi_ok)
+    return false;
+  if (type == napi_undefined)
+    return true;
+
+  c->status = parseUint32Value(env, value, "timeoutMs", &c->wait, &c->errorMsg);
+  if (c->status != napi_ok)
+    return false;
+  if (!c->errorMsg.empty()) {
+    c->status = GRANDI_INVALID_ARGS;
+    return false;
+  }
+  return true;
+}
 
 void freeCapturedFrame(dataCarrier *c, NDIlib_frame_type_e frameType) {
   switch (frameType) {
@@ -800,7 +817,6 @@ napi_value setReceiveTally(napi_env env, napi_callback_info info) {
 }
 
 napi_value videoReceive(napi_env env, napi_callback_info info) {
-  napi_valuetype type;
   dataCarrier *c = new dataCarrier;
 
   napi_value promise;
@@ -816,14 +832,8 @@ napi_value videoReceive(napi_env env, napi_callback_info info) {
   if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c))
     REJECT_RETURN;
 
-  if (argc >= 1) {
-    c->status = napi_typeof(env, args[0], &type);
+  if (argc >= 1 && !parseOptionalTimeout(env, args[0], c))
     REJECT_RETURN;
-    if (type == napi_number) {
-      c->status = napi_get_value_uint32(env, args[0], &c->wait);
-      REJECT_RETURN;
-    }
-  }
 
   napi_value resource_name;
   c->status = napi_create_string_utf8(env, "VideoReceive", NAPI_AUTO_LENGTH,
@@ -1010,8 +1020,13 @@ napi_value dataAndAudioReceive(napi_env env, napi_callback_info info,
 
     if (type == napi_number) {
       waitValue = configValue;
-    } else if (argc >= 2) {
-      waitValue = args[1];
+    } else if (type == napi_object || type == napi_undefined) {
+      if (argc >= 2)
+        waitValue = args[1];
+    } else {
+      REJECT_ERROR_RETURN(
+          "First argument must be audio options, a timeout, or undefined.",
+          GRANDI_INVALID_ARGS);
     }
 
     if (type == napi_object) {
@@ -1055,15 +1070,8 @@ napi_value dataAndAudioReceive(napi_env env, napi_callback_info info,
             GRANDI_INVALID_ARGS);
     }
 
-    if (waitValue != nullptr) {
-      napi_valuetype waitType;
-      c->status = napi_typeof(env, waitValue, &waitType);
+    if (waitValue != nullptr && !parseOptionalTimeout(env, waitValue, c))
       REJECT_RETURN;
-      if (waitType == napi_number) {
-        c->status = napi_get_value_uint32(env, waitValue, &c->wait);
-        REJECT_RETURN;
-      }
-    }
   }
 
   napi_value resource_name;
@@ -1142,7 +1150,6 @@ void metadataReceiveComplete(napi_env env, napi_status asyncStatus,
 }
 
 napi_value metadataReceive(napi_env env, napi_callback_info info) {
-  napi_valuetype type;
   dataCarrier *c = new dataCarrier;
 
   napi_value promise;
@@ -1158,14 +1165,8 @@ napi_value metadataReceive(napi_env env, napi_callback_info info) {
   if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c, true))
     REJECT_RETURN;
 
-  if (argc >= 1) {
-    c->status = napi_typeof(env, args[0], &type);
+  if (argc >= 1 && !parseOptionalTimeout(env, args[0], c))
     REJECT_RETURN;
-    if (type == napi_number) {
-      c->status = napi_get_value_uint32(env, args[0], &c->wait);
-      REJECT_RETURN;
-    }
-  }
 
   napi_value resource_name;
   c->status = napi_create_string_utf8(env, "MetadataReceive", NAPI_AUTO_LENGTH,
