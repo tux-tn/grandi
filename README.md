@@ -63,7 +63,7 @@ const grandi = require("grandi");
 ```
 
 ## Build & distribution
-Each platform package under the `@grandi/` scope bundles the native addon (`grandi.node`) and the corresponding NDI SDK runtime for that OS/arch. The root `grandi` package loads the matching optional dependency first and only compiles locally when no published package is available. Maintainers regenerate those packages from the official NDI SDK by running `node scripts/preinstall.mjs` (to download and stage the SDK) followed by a version bump (e.g., `node scripts/bump-version.mjs <version>`).
+Each platform package under the `@grandi/` scope bundles the native addon (`grandi.node`) and the corresponding NDI SDK runtime for that OS/arch. The root `grandi` package tries a local `node-gyp-build` resolve first and then falls back to the matching `@grandi/<os>-<arch>` optional dependency. Maintainers regenerate those packages from the official NDI SDK by running `node scripts/build-addon.mjs` (to download and stage the SDK) followed by a version bump (e.g., `node scripts/bump-version.mjs <version>`).
 
 ## Using Grandi
 This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. All calls are asynchronous and use JavaScript promises with all of the underlying work of NDI running on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs`, `examples/simple-sender.mjs`, and `examples/simple-framesync.mjs`.
@@ -295,7 +295,7 @@ await sender.audio({
   fourCC: grandi.FOURCC_FLTp,
 });
 
-# Example metadata, that explicitly enable hardware acceleration in receiver
+// Example metadata, that explicitly enable hardware acceleration in receiver
 sender.metadata("<ndi_video_codec type=\"hardware\"/>");
 
 const tally = sender.tally();
@@ -352,12 +352,12 @@ Ready to hack on Grandi? Here’s the typical workflow.
 3. **TypeScript build**
 	- `npm run build` compiles `src/` via `tsdown`, emitting ESM/CJS bundles and declaration files in `dist/`.
 4. **Native addon rebuild**
-	- If you change C/C++ files under `lib/`, recompile with `npx node-gyp-build` (or simply re-run `npm install`). This uses the same loader that consumers invoke at runtime.
+	- If you change C/C++ files under `lib/`, recompile with `npm run build:addon`. This downloads the NDI SDK (if needed), runs `node-gyp rebuild`, and copies the resulting addon into the appropriate scoped package directory.
 5. **Testing**
 	- `npm test` runs the full Vitest suite (unit + integration stubs).
 	- `npm run test:unit` focuses on pure JS/TS tests.
 	- `npm run test:integration` exercises the native bindings against a real NDI environment;
-  - `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
+	- `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
 6. **Linting & formatting**
 	- `npm run lint` runs Oxlint; `npm run format` checks Oxfmt output, and `npm run format:fix` writes formatting changes.
 	- `npm run format:cpp` formats the native sources with `clang-format`.
@@ -391,7 +391,7 @@ This section documents every exported method and type surfaced by the module. Re
 | `video(timeoutMs?: number)` | `Promise<ReceivedVideoFrame>` | Resolve with the next available video frame. |
 | `audio(optionsOrTimeout?: AudioReceiveOptions \| number, timeoutMs?: number)` | `Promise<ReceivedAudioFrame>` | Fetch audio, overriding format/reference level per call if desired. |
 | `metadata(timeoutMs?: number)` | `Promise<ReceivedMetadataFrame>` | Receive metadata frames (XML strings). |
-| `data(optionsOrTimeout?: AudioReceiveOptions \| number, timeoutMs?: number)` | `Promise<ReceiverDataFrame>` | Return whichever payload (video/audio/metadata/source change/status change) arrives first. |
+| `data(optionsOrTimeout?: AudioReceiveOptions \| number, timeoutMs?: number)` | `Promise<ReceiverDataFrame>` | Return whichever payload (video/audio/metadata/source change/status change/timeout) arrives first. |
 | `tally(state: ReceiverTallyState)` | `boolean` | Push tally states (program/preview) upstream to the sender. |
 | `performance()` | `ReceiverPerformance` | Return total and dropped frame counts (video/audio/metadata) since connection. |
 | `queue()` | `ReceiverQueue` | Report the current receiver queue depth per frame type. |
@@ -458,8 +458,9 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 | `AudioFrame` | Outbound audio payload including sample rate, channels/samples, stride, `data`, `fourCC: AudioFourCC`, optional `timecode`, `metadata`. |
 | `ReceivedAudioFrame` | Inbound audio payload with `audioFormat`, `referenceLevel`, raw `bigint` `timecode`, and an optional raw `bigint` receive `timestamp`. |
 | `ReceivedMetadataFrame` | Metadata payload (`type: "metadata"`, `length`, raw `bigint` `timecode`, `data` string). |
-| `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent`. |
+| `ReceiverDataFrame` | Discriminated union of `ReceivedVideoFrame \| ReceivedAudioFrame \| ReceivedMetadataFrame \| SourceChangeEvent \| StatusChangeEvent \| TimeoutEvent`. |
 | `SourceChangeEvent` / `StatusChangeEvent` | Internal notifications delivered via `receiver.data` when the remote sender changes or becomes unavailable. |
+| `TimeoutEvent` | Singleton `{ type: "timeout" }` delivered by `receiver.data()` and `framesync.video()` when no frame is available before the deadline. |
 
 ### Enum reference
 - `ColorFormat` — enumerates `BGRX_BGRA`, `UYVY_BGRA`, `RGBX_RGBA`, `UYVY_RGBA`, `Fastest`, `Best`, and `BGRX_BGRA_FLIPPED`. The `grandi.COLOR_FORMAT_*` constants map to these values.
