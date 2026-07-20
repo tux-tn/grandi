@@ -264,7 +264,7 @@ export interface FrameSync {
 
 export interface Finder {
 	sources(): Source[];
-	wait(timeoutMs?: number): boolean;
+	wait(timeoutMs?: number): Promise<boolean>;
 	destroy(): boolean;
 }
 
@@ -365,7 +365,7 @@ export interface Grandi {
 	 * import grandi from "grandi";
 	 * grandi.initialize();
 	 * const finder = await grandi.find({ showLocalSources: true });
-	 * finder.wait(1000);
+	 * await finder.wait(1000);
 	 * const source = finder.sources()[0];
 	 * finder.destroy();
 	 * const receiver = await grandi.receive({ source });
@@ -409,7 +409,7 @@ export interface Grandi {
 	 * import grandi from "grandi";
 	 * grandi.initialize();
 	 * const finder = await grandi.find({ showLocalSources: true });
-	 * finder.wait(1000);
+	 * await finder.wait(1000);
 	 * console.log(finder.sources());
 	 * finder.destroy();
 	 * ```

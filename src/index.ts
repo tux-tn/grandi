@@ -148,7 +148,7 @@ const addon: GrandiAddon = loadAddon();
  * import { find, initialize } from "grandi";
  * initialize();
  * const finder = await find({ showLocalSources: true });
- * finder.wait(1000);
+ * await finder.wait(1000);
  * console.log(finder.sources());
  * finder.destroy();
  * ```
@@ -226,7 +226,7 @@ export const send = addon.send;
  * import { find, initialize, receive } from "grandi";
  * initialize();
  * const finder = await find({ showLocalSources: true });
- * finder.wait(1000);
+ * await finder.wait(1000);
  * const source = finder.sources()[0];
  * finder.destroy();
  * const receiver = await receive({ source });

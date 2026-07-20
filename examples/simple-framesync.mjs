@@ -13,7 +13,7 @@ async function pickSource() {
 	const finder = await grandi.find({ showLocalSources: true });
 	try {
 		for (let attempts = 0; attempts < 20; attempts++) {
-			if (finder.wait(250)) {
+			if (await finder.wait(250)) {
 				const sources = finder.sources();
 				if (sources.length > 0) return sources[0];
 			}
