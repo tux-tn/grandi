@@ -71,6 +71,7 @@ async function main() {
 			}
 		}
 	} finally {
+		receiver.destroy();
 		grandi.destroy();
 	}
 }
