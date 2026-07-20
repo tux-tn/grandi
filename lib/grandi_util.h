@@ -89,6 +89,20 @@ struct carrier {
   napi_async_work _request = nullptr;
 };
 
+struct ownedBuffer {
+  void *data = nullptr;
+  size_t size = 0;
+  ownedBuffer() = default;
+  ~ownedBuffer();
+  bool allocate(size_t length);
+  bool copyFrom(const void *source, size_t length);
+  ownedBuffer(const ownedBuffer &) = delete;
+  ownedBuffer &operator=(const ownedBuffer &) = delete;
+};
+
+napi_status createExternalBuffer(napi_env env, ownedBuffer *buffer,
+                                 napi_value *result);
+
 enum class nativeCaptureStatus {
   success,
   destroyed,
