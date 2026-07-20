@@ -167,8 +167,8 @@ Modes:
 Notes:
   - Requires a working local NDI environment.
   - Creates a sender + receiver on the same machine.
-  - Measures send/receive rates and best-effort video latency using frame timestamps.
-  - --framesync uses NDI frame-sync for capture (smoother pull-based receiving).
+  - Measures send/receive rates and best-effort video latency using a monotonic clock.
+  - Seeds the first audio/video timecode at 0n, then lets NDI synthesize subsequent timecodes.
   - For stable long runs at 1080p, run with --expose-gc (pnpm bench does this) so buffers can be reclaimed.
 `);
 }
@@ -222,12 +222,10 @@ async function main() {
 		const audioBuffer = Buffer.allocUnsafe(samplesPerFrame * 2 * 4);
 		audioBuffer.fill(0);
 
-		// Reuse a single timestamp array and frame objects to reduce GC churn.
-		// NOTE: we no longer use frame.timestamp for latency — it round-trips
-		// through NDI's 100ns PTP epoch and is not comparable to Date.now().
-		// Instead we record a monotonic hrtime send stamp per frame in a ring
-		// buffer and let the receiver read it back by sequence index.
-		const timestamp = [0, 0];
+		// Reuse frame objects to reduce GC churn. NDI timestamps are receive-only,
+		// so the benchmark uses a zero-based timecode followed by synthesized
+		// timecodes and a monotonic local clock for latency measurements.
+		let firstFrame = true;
 		const videoFrame = {
 			type: "video",
 			xres: args.width,
@@ -239,7 +237,7 @@ async function main() {
 			frameFormatType: grandi.FrameType.Progressive,
 			lineStrideBytes: videoStrideBytes,
 			data: videoBuffer,
-			timestamp,
+			timecode: 0n,
 		};
 
 		const audioFrame = {
@@ -250,7 +248,7 @@ async function main() {
 			channelStrideBytes: samplesPerFrame * 4,
 			data: audioBuffer,
 			fourCC: grandi.FOURCC_FLTp,
-			timestamp,
+			timecode: 0n,
 		};
 
 		const startedAtMs = Date.now();
@@ -295,9 +293,9 @@ async function main() {
 					}
 				}
 
-				const sendNowMs = Date.now();
-				timestamp[0] = Math.floor(sendNowMs / 1000);
-				timestamp[1] = (sendNowMs % 1000) * 1_000_000;
+				const frameTimecode = firstFrame ? 0n : grandi.TIMECODE_SYNTHESIZE;
+				videoFrame.timecode = frameTimecode;
+				audioFrame.timecode = frameTimecode;
 
 				const sendStamp = hrtimeNs();
 				const seq = sendVideoCount;
@@ -318,6 +316,7 @@ async function main() {
 				sendVideoCount += 1;
 				sendVideoBytes += videoPayloadBytes;
 				await audioPromise;
+				firstFrame = false;
 
 				if (args.mode === "throughput" && Date.now() >= deadlineAtMs) break;
 			}

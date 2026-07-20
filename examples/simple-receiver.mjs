@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { setTimeout as sleep } from "node:timers/promises";
-
-import grandi from "../dist/index.mjs";
+import grandi from "grandi";
 
 async function pickSource() {
 	const finder = await grandi.find({ showLocalSources: true });
@@ -23,7 +22,7 @@ async function main() {
 	if (!grandi.isSupportedCPU()) {
 		console.warn("Warning: CPU may not support NDI optimizations.");
 	}
-	grandi.initialize();
+	if (!grandi.initialize()) throw new Error("Failed to initialize NDI.");
 
 	const source = await pickSource();
 	console.log("Using source:", source.name);

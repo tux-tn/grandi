@@ -79,66 +79,20 @@ bool getInt64FromValue(napi_env env, napi_value value, int64_t *out, carrier *c,
   c->status = napi_typeof(env, value, &type);
   if (c->status != napi_ok)
     return false;
-  if (type == napi_number) {
-    c->status = napi_get_value_int64(env, value, out);
-    return c->status == napi_ok;
-  }
   if (type == napi_bigint) {
     bool lossless;
     c->status = napi_get_value_bigint_int64(env, value, out, &lossless);
-    return c->status == napi_ok;
+    if (c->status != napi_ok)
+      return false;
+    if (lossless)
+      return true;
+    c->errorMsg =
+        std::string(propName) + " value must fit in a signed 64-bit integer.";
+  } else {
+    c->errorMsg = std::string(propName) + " value must be a bigint.";
   }
-  c->errorMsg =
-      std::string(propName) +
-      " value must be a number, bigint, or a [seconds,nanoseconds] tuple.";
   c->status = GRANDI_INVALID_ARGS;
   return false;
-}
-
-bool parsePtpTimestampArray(napi_env env, napi_value value, int64_t *out,
-                            carrier *c, const char *propName) {
-  bool isArray;
-  c->status = napi_is_array(env, value, &isArray);
-  if (c->status != napi_ok)
-    return false;
-  if (!isArray) {
-    c->errorMsg =
-        std::string(propName) + " value must be a [seconds,nanoseconds] array.";
-    c->status = GRANDI_INVALID_ARGS;
-    return false;
-  }
-
-  uint32_t length;
-  c->status = napi_get_array_length(env, value, &length);
-  if (c->status != napi_ok)
-    return false;
-  if (length < 2) {
-    c->errorMsg =
-        std::string(propName) + " array must contain two numeric entries.";
-    c->status = GRANDI_INVALID_ARGS;
-    return false;
-  }
-
-  napi_value secsValue, nanosValue;
-  c->status = napi_get_element(env, value, 0, &secsValue);
-  if (c->status != napi_ok)
-    return false;
-  c->status = napi_get_element(env, value, 1, &nanosValue);
-  if (c->status != napi_ok)
-    return false;
-
-  int64_t seconds = 0;
-  if (!getInt64FromValue(env, secsValue, &seconds, c, propName))
-    return false;
-
-  int64_t nanos = 0;
-  if (!getInt64FromValue(env, nanosValue, &nanos, c, propName))
-    return false;
-
-  int64_t hundredNsFromSeconds = seconds * 10000000LL;
-  int64_t hundredNsFromNanos = nanos / 100LL;
-  *out = hundredNsFromSeconds + hundredNsFromNanos;
-  return true;
 }
 
 bool parseTimeProperty(napi_env env, napi_value object, const char *propName,
@@ -155,15 +109,6 @@ bool parseTimeProperty(napi_env env, napi_value object, const char *propName,
 
   if (type == napi_undefined)
     return true;
-
-  if (type == napi_object) {
-    bool isArray;
-    c->status = napi_is_array(env, property, &isArray);
-    if (c->status != napi_ok)
-      return false;
-    if (isArray)
-      return parsePtpTimestampArray(env, property, target, c, propName);
-  }
 
   return getInt64FromValue(env, property, target, c, propName);
 }
