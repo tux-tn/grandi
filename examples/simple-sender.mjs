@@ -75,7 +75,7 @@ async function main() {
 			timestamp,
 		});
 
-		await sender.metadata("<title>Grandi Example</title>");
+		sender.metadata("<title>Grandi Example</title>");
 
 		await sleep((1000 * FPS_D) / FPS_N);
 	}

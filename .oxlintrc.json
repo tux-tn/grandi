@@ -1,10 +1,13 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	"plugins": ["typescript"],
+	"plugins": ["typescript", "node", "promise", "jsdoc"],
 	"categories": {
 		"correctness": "error"
 	},
 	"options": {
 		"typeAware": true
+	},
+	"rules": {
+		"typescript/unbound-method": "off"
 	}
 }
