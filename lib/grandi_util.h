@@ -122,7 +122,7 @@ int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line);
 #define NAPI_THROW_ERROR(msg)                                                  \
   {                                                                            \
     char errorMsg[100];                                                        \
-    sprintf(errorMsg, msg);                                                    \
+    snprintf(errorMsg, sizeof(errorMsg), "%s", msg);                           \
     napi_throw_error(env, nullptr, errorMsg);                                  \
     return nullptr;                                                            \
   }

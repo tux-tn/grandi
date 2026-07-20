@@ -135,8 +135,9 @@ napi_status checkArgs(napi_env env, napi_callback_info info, char *methodName,
 
   if (realArgc != argc) {
     char errorMsg[100];
-    sprintf(errorMsg, "For method %s, expected %zi arguments and got %zi.",
-            methodName, argc, realArgc);
+    snprintf(errorMsg, sizeof(errorMsg),
+             "For method %s, expected %zi arguments and got %zi.", methodName,
+             argc, realArgc);
     napi_throw_error(env, nullptr, errorMsg);
     return napi_pending_exception;
   }
@@ -148,9 +149,10 @@ napi_status checkArgs(napi_env env, napi_callback_info info, char *methodName,
       return status;
     if (t != types[x]) {
       char errorMsg[100];
-      sprintf(errorMsg,
-              "For method %s argument %i, expected type %s and got %s.",
-              methodName, x + 1, getNapiTypeName(types[x]), getNapiTypeName(t));
+      snprintf(errorMsg, sizeof(errorMsg),
+               "For method %s argument %i, expected type %s and got %s.",
+               methodName, x + 1, getNapiTypeName(types[x]),
+               getNapiTypeName(t));
       napi_throw_error(env, nullptr, errorMsg);
       return napi_pending_exception;
     }
@@ -268,9 +270,13 @@ int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line) {
       FLOATING_STATUS;
       c->errorMsg = std::string(errorInfo->error_message);
     }
-    char *extMsg = (char *)malloc(sizeof(char) * c->errorMsg.length() + 200);
-    sprintf(extMsg, "In file %s on line %i, found error: %s", file, line,
-            c->errorMsg.c_str());
+    int extMsgLength =
+        snprintf(nullptr, 0, "In file %s on line %i, found error: %s", file,
+                 line, c->errorMsg.c_str());
+    char *extMsg = (char *)malloc((size_t)extMsgLength + 1);
+    snprintf(extMsg, (size_t)extMsgLength + 1,
+             "In file %s on line %i, found error: %s", file, line,
+             c->errorMsg.c_str());
     status =
         napi_create_string_utf8(env, custom_itoa(c->status, errorChars, 10),
                                 NAPI_AUTO_LENGTH, &errorCode);
