@@ -47,6 +47,7 @@ struct framesyncCarrier : carrier {
 struct framesyncVideoCarrier : carrier {
   framesyncWrapper *wrapper = nullptr;
   NDIlib_video_frame_v2_t videoFrame{};
+  ownedBuffer buffer;
   NDIlib_frame_format_type_e fieldType = NDIlib_frame_format_type_progressive;
   bool noVideo = false;
   ~framesyncVideoCarrier();
@@ -55,6 +56,7 @@ struct framesyncVideoCarrier : carrier {
 struct framesyncAudioCarrier : carrier {
   framesyncWrapper *wrapper = nullptr;
   NDIlib_audio_frame_v3_t audioFrame{};
+  ownedBuffer buffer;
   int sampleRate = 0;
   int noChannels = 0;
   int noSamples = 0;
@@ -421,6 +423,16 @@ void framesyncVideoExecute(napi_env env, void *data) {
   if (c->videoFrame.p_data == nullptr || c->videoFrame.xres == 0 ||
       c->videoFrame.yres == 0) {
     c->noVideo = true;
+    return;
+  }
+  size_t videoBytes = videoDataSize(c->videoFrame);
+  if (videoBytes == 0 ||
+      !c->buffer.copyFrom(c->videoFrame.p_data, videoBytes)) {
+    c->errorMsg = videoBytes == 0
+                      ? "Received empty NDI video frame buffer."
+                      : "Failed to allocate FrameSync video buffer.";
+    c->status = videoBytes == 0 ? GRANDI_NOT_VIDEO : GRANDI_ALLOCATION_FAILURE;
+    NDIlib_framesync_free_video(c->wrapper->fs, &c->videoFrame);
   }
 }
 
@@ -521,15 +533,7 @@ void framesyncVideoComplete(napi_env env, napi_status asyncStatus, void *data) {
     REJECT_STATUS;
   }
 
-  size_t videoBytes = videoDataSize(c->videoFrame);
-  if (c->videoFrame.p_data == nullptr || videoBytes == 0) {
-    c->errorMsg = "Received empty NDI video frame buffer.";
-    c->status = GRANDI_NOT_VIDEO;
-    REJECT_STATUS;
-  }
-
-  c->status = napi_create_buffer_copy(
-      env, videoBytes, (void *)c->videoFrame.p_data, nullptr, &param);
+  c->status = createExternalBuffer(env, &c->buffer, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
@@ -573,16 +577,8 @@ napi_value framesyncVideo(napi_env env, napi_callback_info info) {
     }
   }
 
-  napi_value resource_name;
-  c->status = napi_create_string_utf8(env, "FrameSyncVideo", NAPI_AUTO_LENGTH,
-                                      &resource_name);
-  REJECT_RETURN;
-  c->status =
-      napi_create_async_work(env, NULL, resource_name, framesyncVideoExecute,
-                             framesyncVideoComplete, c, &c->_request);
-  REJECT_RETURN;
-  c->status = napi_queue_async_work(env, c->_request);
-  REJECT_RETURN;
+  framesyncVideoExecute(env, c);
+  framesyncVideoComplete(env, napi_ok, c);
 
   return promise;
 }
@@ -591,6 +587,17 @@ void framesyncAudioExecute(napi_env env, void *data) {
   framesyncAudioCarrier *c = (framesyncAudioCarrier *)data;
   NDIlib_framesync_capture_audio_v2(c->wrapper->fs, &c->audioFrame,
                                     c->sampleRate, c->noChannels, c->noSamples);
+  size_t audioBytes = 0;
+  if (c->audioFrame.p_data != nullptr && c->audioFrame.no_channels > 0 &&
+      c->audioFrame.channel_stride_in_bytes > 0) {
+    audioBytes = (size_t)c->audioFrame.channel_stride_in_bytes *
+                 (size_t)c->audioFrame.no_channels;
+  }
+  if (!c->buffer.copyFrom(c->audioFrame.p_data, audioBytes)) {
+    c->errorMsg = "Failed to allocate FrameSync audio buffer.";
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    NDIlib_framesync_free_audio_v2(c->wrapper->fs, &c->audioFrame);
+  }
 }
 
 void framesyncAudioComplete(napi_env env, napi_status asyncStatus, void *data) {
@@ -662,15 +669,7 @@ void framesyncAudioComplete(napi_env env, napi_status asyncStatus, void *data) {
     REJECT_STATUS;
   }
 
-  size_t audioBytes = 0;
-  if (c->audioFrame.p_data != nullptr && c->audioFrame.no_channels > 0 &&
-      c->audioFrame.channel_stride_in_bytes > 0) {
-    audioBytes = (size_t)c->audioFrame.channel_stride_in_bytes *
-                 (size_t)c->audioFrame.no_channels;
-  }
-
-  c->status = napi_create_buffer_copy(
-      env, audioBytes, (void *)c->audioFrame.p_data, nullptr, &param);
+  c->status = createExternalBuffer(env, &c->buffer, &param);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "data", param);
   REJECT_STATUS;
@@ -759,16 +758,8 @@ napi_value framesyncAudio(napi_env env, napi_callback_info info) {
     REJECT_ERROR_RETURN("samples must be greater than zero.",
                         GRANDI_INVALID_ARGS);
 
-  napi_value resource_name;
-  c->status = napi_create_string_utf8(env, "FrameSyncAudio", NAPI_AUTO_LENGTH,
-                                      &resource_name);
-  REJECT_RETURN;
-  c->status =
-      napi_create_async_work(env, NULL, resource_name, framesyncAudioExecute,
-                             framesyncAudioComplete, c, &c->_request);
-  REJECT_RETURN;
-  c->status = napi_queue_async_work(env, c->_request);
-  REJECT_RETURN;
+  framesyncAudioExecute(env, c);
+  framesyncAudioComplete(env, napi_ok, c);
 
   return promise;
 }

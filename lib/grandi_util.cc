@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <cmath>
 #include <chrono>
+#include <cstring>
 #include <string>
 #include <limits>
 #include <algorithm>
@@ -204,6 +205,46 @@ void tidyCarrier(napi_env env, carrier *c) {
     FLOATING_STATUS;
   }
   delete c;
+}
+
+ownedBuffer::~ownedBuffer() { free(data); }
+
+bool ownedBuffer::allocate(size_t length) {
+  free(data);
+  data = nullptr;
+  size = 0;
+  if (length == 0)
+    return true;
+  data = malloc(length);
+  if (data == nullptr)
+    return false;
+  size = length;
+  return true;
+}
+
+bool ownedBuffer::copyFrom(const void *source, size_t length) {
+  if (length > 0 && source == nullptr)
+    return false;
+  if (!allocate(length))
+    return false;
+  if (length > 0)
+    memcpy(data, source, length);
+  return true;
+}
+
+void finalizeOwnedBuffer(napi_env env, void *data, void *hint) { free(data); }
+
+napi_status createExternalBuffer(napi_env env, ownedBuffer *buffer,
+                                 napi_value *result) {
+  if (buffer->size == 0)
+    return napi_create_buffer(env, 0, nullptr, result);
+  napi_status status = napi_create_external_buffer(
+      env, buffer->size, buffer->data, finalizeOwnedBuffer, nullptr, result);
+  if (status == napi_ok) {
+    buffer->data = nullptr;
+    buffer->size = 0;
+  }
+  return status;
 }
 
 nativeHandle *createNativeHandle(void *value, void (*destroy)(void *)) {
