@@ -207,6 +207,35 @@ void tidyCarrier(napi_env env, carrier *c) {
   delete c;
 }
 
+napi_status readUtf8StringValue(napi_env env, napi_value value,
+                                std::unique_ptr<char[]> *result) {
+  size_t length;
+  napi_status status =
+      napi_get_value_string_utf8(env, value, nullptr, 0, &length);
+  if (status != napi_ok)
+    return status;
+  std::unique_ptr<char[]> buffer(new (std::nothrow) char[length + 1]);
+  if (buffer == nullptr)
+    return napi_generic_failure;
+  size_t written;
+  status = napi_get_value_string_utf8(env, value, buffer.get(), length + 1,
+                                      &written);
+  if (status != napi_ok)
+    return status;
+  *result = std::move(buffer);
+  return napi_ok;
+}
+
+bool readUtf8String(napi_env env, napi_value value,
+                    std::unique_ptr<char[]> *result, carrier *c) {
+  c->status = readUtf8StringValue(env, value, result);
+  if (c->status == napi_generic_failure) {
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    c->errorMsg = "Failed to allocate UTF-8 string buffer.";
+  }
+  return c->status == napi_ok;
+}
+
 ownedBuffer::~ownedBuffer() { free(data); }
 
 bool ownedBuffer::allocate(size_t length) {
@@ -248,7 +277,9 @@ napi_status createExternalBuffer(napi_env env, ownedBuffer *buffer,
 }
 
 nativeHandle *createNativeHandle(void *value, void (*destroy)(void *)) {
-  nativeHandle *handle = new nativeHandle;
+  nativeHandle *handle = new (std::nothrow) nativeHandle;
+  if (handle == nullptr)
+    return nullptr;
   handle->value = value;
   handle->destroy = destroy;
   return handle;
@@ -389,13 +420,9 @@ int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line) {
       FLOATING_STATUS;
       c->errorMsg = std::string(errorInfo->error_message);
     }
-    int extMsgLength =
-        snprintf(nullptr, 0, "In file %s on line %i, found error: %s", file,
-                 line, c->errorMsg.c_str());
-    char *extMsg = (char *)malloc((size_t)extMsgLength + 1);
-    snprintf(extMsg, (size_t)extMsgLength + 1,
-             "In file %s on line %i, found error: %s", file, line,
-             c->errorMsg.c_str());
+    char extMsg[1024];
+    snprintf(extMsg, sizeof(extMsg), "In file %s on line %i, found error: %s",
+             file, line, c->errorMsg.c_str());
     status =
         napi_create_string_utf8(env, custom_itoa(c->status, errorChars, 10),
                                 NAPI_AUTO_LENGTH, &errorCode);
@@ -407,7 +434,6 @@ int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line) {
     status = napi_reject_deferred(env, c->_deferred, errorValue);
     FLOATING_STATUS;
 
-    free(extMsg);
     tidyCarrier(env, c);
   }
   return statusCode;
@@ -511,69 +537,33 @@ size_t videoDataSize(const NDIlib_video_frame_v2_t &frame) {
 
 // Make a native source object from components of a source object
 napi_status makeNativeSource(napi_env env, napi_value source,
-                             NDIlib_source_t *result) {
-  result->p_ndi_name = nullptr;
-  result->p_url_address = nullptr;
+                             nativeSource *result) {
+  result->value = {};
+  result->name.reset();
+  result->urlAddress.reset();
 
-  napi_status status;
+  napi_value nameValue, urlValue;
+  napi_status status = napi_get_named_property(env, source, "name", &nameValue);
+  PASS_STATUS;
+  status = napi_get_named_property(env, source, "urlAddress", &urlValue);
+  PASS_STATUS;
+
   napi_valuetype type;
-  napi_value namev, urlv;
-  size_t namel, urll;
-  char *name = nullptr;
-  char *url = nullptr;
-
-  status = napi_get_named_property(env, source, "name", &namev);
-  PASS_STATUS;
-  status = napi_get_named_property(env, source, "urlAddress", &urlv);
-  PASS_STATUS;
-
-  status = napi_typeof(env, namev, &type);
+  status = napi_typeof(env, nameValue, &type);
   PASS_STATUS;
   if (type == napi_string) {
-    status = napi_get_value_string_utf8(env, namev, nullptr, 0, &namel);
+    status = readUtf8StringValue(env, nameValue, &result->name);
     PASS_STATUS;
-    name = (char *)malloc(namel + 1);
-    if (!name)
-      return napi_generic_failure;
-    status = napi_get_value_string_utf8(env, namev, name, namel + 1, &namel);
-    if (status != napi_ok) {
-      free(name);
-      return status;
-    }
+    result->value.p_ndi_name = result->name.get();
   }
 
-  status = napi_typeof(env, urlv, &type);
+  status = napi_typeof(env, urlValue, &type);
   PASS_STATUS;
   if (type == napi_string) {
-    status = napi_get_value_string_utf8(env, urlv, nullptr, 0, &urll);
+    status = readUtf8StringValue(env, urlValue, &result->urlAddress);
     PASS_STATUS;
-    url = (char *)malloc(urll + 1);
-    if (!url) {
-      free(name);
-      return napi_generic_failure;
-    }
-    status = napi_get_value_string_utf8(env, urlv, url, urll + 1, &urll);
-    if (status != napi_ok) {
-      free(name);
-      free(url);
-      return status;
-    }
+    result->value.p_url_address = result->urlAddress.get();
   }
 
-  result->p_ndi_name = name;
-  result->p_url_address = url;
   return napi_ok;
-}
-
-void freeNativeSource(NDIlib_source_t *result) {
-  if (result == nullptr)
-    return;
-  if (result->p_ndi_name != nullptr) {
-    free((void *)result->p_ndi_name);
-    result->p_ndi_name = nullptr;
-  }
-  if (result->p_url_address != nullptr) {
-    free((void *)result->p_url_address);
-    result->p_url_address = nullptr;
-  }
 }
