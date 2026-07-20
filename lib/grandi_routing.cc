@@ -39,12 +39,12 @@ napi_value routing_clear(napi_env, napi_callback_info);
 napi_value routing_connections(napi_env, napi_callback_info);
 napi_value routing_sourcename(napi_env, napi_callback_info);
 
-/*  wrapper structure for embedded value  */
-typedef struct embeddedValue {
-  void *value;
-} embeddedValue_t;
+void destroyRoutingInstance(void *value) {
+  NDIlib_routing_destroy((NDIlib_routing_instance_t)value);
+}
 
 bool getRoutingInstanceFromThis(napi_env env, napi_value thisValue,
+                                nativeHandle **handle,
                                 NDIlib_routing_instance_t *routing) {
   napi_value embeddedValue;
   napi_status status =
@@ -61,30 +61,20 @@ bool getRoutingInstanceFromThis(napi_env env, napi_value thisValue,
     return false;
   }
 
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
+  void *externalData;
+  status = napi_get_value_external(env, embeddedValue, &externalData);
   if (status != napi_ok)
     return false;
-  if (embeddedData == nullptr || embeddedData->value == nullptr) {
+  nativeHandle *native = (nativeHandle *)externalData;
+  void *value;
+  if (!acquireNativeHandle(native, &value)) {
     napi_throw_error(env, nullptr, "Routing has been destroyed.");
     return false;
   }
 
-  *routing = (NDIlib_routing_instance_t)(embeddedData->value);
+  *handle = native;
+  *routing = (NDIlib_routing_instance_t)value;
   return true;
-}
-
-/*  callback for destroying embedded value  */
-void finalizeRouting(napi_env env, void *data, void *hint) {
-  embeddedValue_t *embeddedValue = (embeddedValue_t *)data;
-  if (embeddedValue != nullptr) {
-    NDIlib_routing_instance_t routing =
-        (NDIlib_routing_instance_t)(embeddedValue->value);
-    if (routing != nullptr)
-      NDIlib_routing_destroy(routing);
-    embeddedValue->value = nullptr;
-  }
-  free(data);
 }
 
 /*  callback for executing method routing()  */
@@ -119,12 +109,14 @@ void routingComplete(napi_env env, napi_status asyncStatus, void *data) {
 
   /*  embed the native routing object  */
   napi_value embedded;
-  embeddedValue_t *embeddedValue =
-      (embeddedValue_t *)malloc(sizeof(embeddedValue_t));
-  embeddedValue->value = c->routing;
-  c->status = napi_create_external(env, embeddedValue, finalizeRouting, nullptr,
+  nativeHandle *handle = createNativeHandle(c->routing, destroyRoutingInstance);
+  c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
                                    &embedded);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    closeNativeHandle(handle);
+    delete handle;
+    REJECT_STATUS;
+  }
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
 
@@ -286,34 +278,26 @@ napi_value routing_destroy(napi_env env, napi_callback_info info) {
       napi_ok)
     goto done;
 
-  napi_valuetype result;
-  if (napi_typeof(env, embeddedValue, &result) != napi_ok)
+  napi_valuetype type;
+  if (napi_typeof(env, embeddedValue, &type) != napi_ok)
     goto done;
 
-  if (result == napi_external) {
-    embeddedValue_t *embeddedData;
-    if (napi_get_value_external(env, embeddedValue, (void **)&embeddedData) !=
-        napi_ok)
+  if (type == napi_external) {
+    void *externalData;
+    if (napi_get_value_external(env, embeddedValue, &externalData) != napi_ok)
       goto done;
+    success = closeNativeHandle((nativeHandle *)externalData);
 
-    if (embeddedData != nullptr) {
-      NDIlib_routing_instance_t routing =
-          (NDIlib_routing_instance_t)(embeddedData->value);
-      if (routing != nullptr)
-        NDIlib_routing_destroy(routing);
-      embeddedData->value = nullptr;
-    }
     napi_value value;
     if (napi_create_int32(env, 0, &value) == napi_ok)
       napi_set_named_property(env, thisValue, "embedded", value);
-    success = true;
   }
 
 done:
-  napi_value resultValue;
-  if (napi_get_boolean(env, success, &resultValue) != napi_ok)
-    napi_get_boolean(env, false, &resultValue);
-  return resultValue;
+  napi_value result;
+  if (napi_get_boolean(env, success, &result) != napi_ok)
+    napi_get_boolean(env, false, &result);
+  return result;
 }
 
 /*  API method "routing.change()"  */
@@ -328,9 +312,11 @@ napi_value routing_change(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
+  nativeHandle *handle;
   NDIlib_routing_instance_t routing;
-  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+  if (!getRoutingInstanceFromThis(env, thisValue, &handle, &routing))
     return nullptr;
+  nativeHandleGuard guard(handle);
 
   /*  fetch source argument  */
   if (argc != (size_t)1)
@@ -401,9 +387,11 @@ napi_value routing_clear(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
+  nativeHandle *handle;
   NDIlib_routing_instance_t routing;
-  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+  if (!getRoutingInstanceFromThis(env, thisValue, &handle, &routing))
     return nullptr;
+  nativeHandleGuard guard(handle);
 
   /*  call NDI API functionality  */
   int ok = NDIlib_routing_clear(routing);
@@ -428,9 +416,11 @@ napi_value routing_connections(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
+  nativeHandle *handle;
   NDIlib_routing_instance_t routing;
-  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+  if (!getRoutingInstanceFromThis(env, thisValue, &handle, &routing))
     return nullptr;
+  nativeHandleGuard guard(handle);
 
   /*  call NDI API functionality  */
   int conns = NDIlib_routing_get_no_connections(routing, 0);
@@ -455,9 +445,11 @@ napi_value routing_sourcename(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native routing object  */
+  nativeHandle *handle;
   NDIlib_routing_instance_t routing;
-  if (!getRoutingInstanceFromThis(env, thisValue, &routing))
+  if (!getRoutingInstanceFromThis(env, thisValue, &handle, &routing))
     return nullptr;
+  nativeHandleGuard guard(handle);
 
   /*  call NDI API functionality  */
   const NDIlib_source_t *source = NDIlib_routing_get_source_name(routing);

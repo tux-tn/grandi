@@ -286,6 +286,12 @@ void releaseNativeHandle(nativeHandle *handle) {
   if (deleteHandle)
     delete handle;
 }
+nativeHandleGuard::nativeHandleGuard(nativeHandle *handle) : handle(handle) {}
+
+nativeHandleGuard::~nativeHandleGuard() {
+  if (handle != nullptr)
+    releaseNativeHandle(handle);
+}
 
 bool closeNativeHandle(nativeHandle *handle) {
   if (handle == nullptr)

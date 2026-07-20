@@ -115,6 +115,13 @@ void releaseNativeCaptureBinding(nativeHandle *handle);
 void releaseNativeHandle(nativeHandle *handle);
 bool closeNativeHandle(nativeHandle *handle);
 void finalizeNativeHandle(napi_env env, void *data, void *hint);
+struct nativeHandleGuard {
+  nativeHandle *handle;
+  explicit nativeHandleGuard(nativeHandle *handle);
+  ~nativeHandleGuard();
+  nativeHandleGuard(const nativeHandleGuard &) = delete;
+  nativeHandleGuard &operator=(const nativeHandleGuard &) = delete;
+};
 
 void tidyCarrier(napi_env env, carrier *c);
 int32_t rejectStatus(napi_env env, carrier *c, const char *file, int32_t line);

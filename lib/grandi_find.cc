@@ -36,22 +36,40 @@ napi_value find_destroy(napi_env, napi_callback_info);
 napi_value find_sources(napi_env, napi_callback_info);
 napi_value find_wait(napi_env, napi_callback_info);
 
-/*  wrapper structure for embedded value  */
-typedef struct embeddedValue {
-  void *value;
-} embeddedValue_t;
+void destroyFindInstance(void *value) {
+  NDIlib_find_destroy((NDIlib_find_instance_t)value);
+}
 
-/*  callback for destroying embedded value  */
-void finalizeFind(napi_env env, void *data, void *hint) {
-  embeddedValue_t *embeddedValue = (embeddedValue_t *)data;
-  if (embeddedValue != nullptr) {
-    NDIlib_find_instance_t find =
-        (NDIlib_find_instance_t)(embeddedValue->value);
-    if (find != nullptr)
-      NDIlib_find_destroy(find);
-    embeddedValue->value = nullptr;
+bool acquireFindFromThis(napi_env env, napi_value thisValue,
+                         nativeHandle **handle, NDIlib_find_instance_t *find,
+                         carrier *c) {
+  napi_value embedded;
+  c->status = napi_get_named_property(env, thisValue, "embedded", &embedded);
+  if (c->status != napi_ok)
+    return false;
+  napi_valuetype type;
+  c->status = napi_typeof(env, embedded, &type);
+  if (c->status != napi_ok)
+    return false;
+  if (type != napi_external) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "Finder has been destroyed.";
+    return false;
   }
-  free(data);
+  void *externalData;
+  c->status = napi_get_value_external(env, embedded, &externalData);
+  if (c->status != napi_ok)
+    return false;
+  nativeHandle *native = (nativeHandle *)externalData;
+  void *value;
+  if (!acquireNativeHandle(native, &value)) {
+    c->status = GRANDI_INVALID_ARGS;
+    c->errorMsg = "Finder has been destroyed.";
+    return false;
+  }
+  *handle = native;
+  *find = (NDIlib_find_instance_t)value;
+  return true;
 }
 
 /*  callback for executing method find()  */
@@ -87,12 +105,14 @@ void findComplete(napi_env env, napi_status asyncStatus, void *data) {
 
   /*  embed the native find object  */
   napi_value embedded;
-  embeddedValue_t *embeddedValue =
-      (embeddedValue_t *)malloc(sizeof(embeddedValue_t));
-  embeddedValue->value = c->find;
-  c->status = napi_create_external(env, embeddedValue, finalizeFind, nullptr,
+  nativeHandle *handle = createNativeHandle(c->find, destroyFindInstance);
+  c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
                                    &embedded);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    closeNativeHandle(handle);
+    delete handle;
+    REJECT_STATUS;
+  }
   c->status = napi_set_named_property(env, result, "embedded", embedded);
   REJECT_STATUS;
 
@@ -238,34 +258,26 @@ napi_value find_destroy(napi_env env, napi_callback_info info) {
       napi_ok)
     goto done;
 
-  napi_valuetype result;
-  if (napi_typeof(env, embeddedValue, &result) != napi_ok)
+  napi_valuetype type;
+  if (napi_typeof(env, embeddedValue, &type) != napi_ok)
     goto done;
 
-  if (result == napi_external) {
-    embeddedValue_t *embeddedData;
-    if (napi_get_value_external(env, embeddedValue, (void **)&embeddedData) !=
-        napi_ok)
+  if (type == napi_external) {
+    void *externalData;
+    if (napi_get_value_external(env, embeddedValue, &externalData) != napi_ok)
       goto done;
+    success = closeNativeHandle((nativeHandle *)externalData);
 
-    if (embeddedData != nullptr) {
-      NDIlib_find_instance_t find =
-          (NDIlib_find_instance_t)(embeddedData->value);
-      if (find != nullptr)
-        NDIlib_find_destroy(find);
-      embeddedData->value = nullptr;
-    }
     napi_value value;
     if (napi_create_int32(env, 0, &value) == napi_ok)
       napi_set_named_property(env, thisValue, "embedded", value);
-    success = true;
   }
 
 done:
-  napi_value resultValue;
-  if (napi_get_boolean(env, success, &resultValue) != napi_ok)
-    napi_get_boolean(env, false, &resultValue);
-  return resultValue;
+  napi_value result;
+  if (napi_get_boolean(env, success, &result) != napi_ok)
+    napi_get_boolean(env, false, &result);
+  return result;
 }
 
 /*  API method "find.sources()"  */
@@ -280,15 +292,19 @@ napi_value find_sources(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   /*  fetch embedded NDI native find object  */
-  napi_value embeddedValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-  CHECK_STATUS;
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-  CHECK_STATUS;
-  NDIlib_find_instance_t find = (NDIlib_find_instance_t)(embeddedData->value);
-  if (find == nullptr)
-    NAPI_THROW_ERROR("Finder has been destroyed.");
+  carrier c;
+  nativeHandle *handle = nullptr;
+  NDIlib_find_instance_t find = nullptr;
+  if (!acquireFindFromThis(env, thisValue, &handle, &find, &c)) {
+    if (c.status >= GRANDI_ERROR_START)
+      napi_throw_error(env, nullptr, c.errorMsg.c_str());
+    else {
+      status = (napi_status)c.status;
+      CHECK_STATUS;
+    }
+    return nullptr;
+  }
+  nativeHandleGuard guard(handle);
 
   /*  call NDI API functionality  */
   uint32_t no_sources;
