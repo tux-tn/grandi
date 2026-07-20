@@ -238,10 +238,10 @@ const fs = await grandi.framesync(receiver);
 const video = await fs.video(grandi.FrameType.Progressive);
 
 // Pull audio resampled to your requested cadence.
-const audio = await fs.audio({ sampleRate: 48_000, noChannels: 2, noSamples: 1600 });
+const audio = await fs.audio({ sampleRate: 48_000, channels: 2, samples: 1600 });
 
 // Query the current incoming format without pulling samples.
-const format = fs.audioFormat(); // { sampleRate, noChannels } | undefined
+const format = fs.audioFormat(); // { sampleRate, channels } | undefined
 
 fs.destroy();       // destroy frame-sync first
 receiver.destroy(); // then destroy the receiver
@@ -249,7 +249,7 @@ receiver.destroy(); // then destroy the receiver
 
 Notes:
 - `fs.video()` and `fs.audio()` always return immediately; they may duplicate/drop frames to match your call rate.
-- `fs.audio()` requires a positive `noSamples`; omit `sampleRate` or `noChannels` to use the incoming format.
+- `fs.audio()` requires positive `samples`; omit `sampleRate` or `channels` to use the incoming format. The legacy `noSamples` and `noChannels` names remain supported.
 - Always destroy the frame-sync before destroying the receiver it wraps.
 
 ### Sending streams

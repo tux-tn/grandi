@@ -369,8 +369,8 @@ async function main() {
 				if (args.framesync && args.audio) {
 					const audio = await fs.audio({
 						sampleRate: 48_000,
-						noChannels: 2,
-						noSamples: samplesPerFrame,
+						channels: 2,
+						samples: samplesPerFrame,
 					});
 					recvAudioCount += 1;
 					recvAudioBytes += audio.data.length;

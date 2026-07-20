@@ -567,10 +567,10 @@ describe("grandi native addon (integration)", () => {
 			});
 			fs = await grandi.framesync(receiver);
 			await expect(fs.audio({} as never)).rejects.toThrow(
-				"noSamples must be a number.",
+				"samples must be a number.",
 			);
-			await expect(fs.audio({ noSamples: 0 })).rejects.toThrow(
-				"noSamples must be greater than zero.",
+			await expect(fs.audio({ samples: 0 })).rejects.toThrow(
+				"samples must be greater than zero.",
 			);
 
 			for (let i = 0; i < 3; i++) {
@@ -583,8 +583,8 @@ describe("grandi native addon (integration)", () => {
 
 				const audioFrame = await fs.audio({
 					sampleRate: 48_000,
-					noChannels: 2,
-					noSamples: 1600,
+					channels: 2,
+					samples: 1600,
 				});
 				expect(audioFrame.type).toBe("audio");
 				expect(audioFrame.sampleRate).toBe(48_000);
@@ -606,7 +606,7 @@ describe("grandi native addon (integration)", () => {
 			}
 			expect(audioFormat).toEqual({
 				sampleRate: 48_000,
-				noChannels: 2,
+				channels: 2,
 			});
 
 			expect(fs.destroy()).toBe(true);
@@ -707,6 +707,7 @@ describe("grandi native addon (integration)", () => {
 			);
 			assertReceivedVideoFrame(videoFrame);
 
+			// Legacy option names remain supported for existing callers.
 			const audioFrame = await fs.audio({
 				sampleRate: 48_000,
 				noChannels: 2,

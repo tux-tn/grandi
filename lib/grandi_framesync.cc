@@ -302,12 +302,12 @@ napi_value audioFormat(napi_env env, napi_callback_info info) {
   NDIlib_audio_frame_v3_t frame{};
   NDIlib_framesync_capture_audio_v2(wrapper->fs, &frame, 0, 0, 0);
   int sampleRate = frame.sample_rate;
-  int noChannels = frame.no_channels;
+  int channels = frame.no_channels;
   NDIlib_framesync_free_audio_v2(wrapper->fs, &frame);
   releaseFrameSyncWrapper(wrapper);
 
   napi_value result;
-  if (sampleRate <= 0 || noChannels <= 0) {
+  if (sampleRate <= 0 || channels <= 0) {
     status = napi_get_undefined(env, &result);
     CHECK_STATUS;
     return result;
@@ -320,9 +320,9 @@ napi_value audioFormat(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
   status = napi_set_named_property(env, result, "sampleRate", value);
   CHECK_STATUS;
-  status = napi_create_int32(env, noChannels, &value);
+  status = napi_create_int32(env, channels, &value);
   CHECK_STATUS;
-  status = napi_set_named_property(env, result, "noChannels", value);
+  status = napi_set_named_property(env, result, "channels", value);
   CHECK_STATUS;
   return result;
 }
@@ -720,29 +720,42 @@ napi_value framesyncAudio(napi_env env, napi_callback_info info) {
 
   napi_value channelsValue;
   c->status =
-      napi_get_named_property(env, options, "noChannels", &channelsValue);
+      napi_get_named_property(env, options, "channels", &channelsValue);
   REJECT_RETURN;
   c->status = napi_typeof(env, channelsValue, &type);
   REJECT_RETURN;
+  if (type == napi_undefined) {
+    c->status =
+        napi_get_named_property(env, options, "noChannels", &channelsValue);
+    REJECT_RETURN;
+    c->status = napi_typeof(env, channelsValue, &type);
+    REJECT_RETURN;
+  }
   if (type != napi_undefined) {
     if (type != napi_number)
-      REJECT_ERROR_RETURN("noChannels must be a number.", GRANDI_INVALID_ARGS);
+      REJECT_ERROR_RETURN("channels must be a number.", GRANDI_INVALID_ARGS);
     c->status = napi_get_value_int32(env, channelsValue, &c->noChannels);
     REJECT_RETURN;
   }
 
   napi_value samplesValue;
-  c->status =
-      napi_get_named_property(env, options, "noSamples", &samplesValue);
+  c->status = napi_get_named_property(env, options, "samples", &samplesValue);
   REJECT_RETURN;
   c->status = napi_typeof(env, samplesValue, &type);
   REJECT_RETURN;
+  if (type == napi_undefined) {
+    c->status =
+        napi_get_named_property(env, options, "noSamples", &samplesValue);
+    REJECT_RETURN;
+    c->status = napi_typeof(env, samplesValue, &type);
+    REJECT_RETURN;
+  }
   if (type != napi_number)
-    REJECT_ERROR_RETURN("noSamples must be a number.", GRANDI_INVALID_ARGS);
+    REJECT_ERROR_RETURN("samples must be a number.", GRANDI_INVALID_ARGS);
   c->status = napi_get_value_int32(env, samplesValue, &c->noSamples);
   REJECT_RETURN;
   if (c->noSamples <= 0)
-    REJECT_ERROR_RETURN("noSamples must be greater than zero.",
+    REJECT_ERROR_RETURN("samples must be greater than zero.",
                         GRANDI_INVALID_ARGS);
 
   napi_value resource_name;

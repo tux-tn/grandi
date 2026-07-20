@@ -5,8 +5,8 @@ import grandi from "grandi";
 const FPS = 30;
 const AUDIO_OPTIONS = {
 	sampleRate: 48_000,
-	noChannels: 2,
-	noSamples: 1_600, // sampleRate / FPS = 48,000 / 30 = 1,600 samples per frame (in framesync mode, this is the number of samples to pull per frame)
+	channels: 2,
+	samples: 1_600, // sampleRate / FPS = 48,000 / 30 = 1,600 samples per frame
 };
 
 async function pickSource() {
