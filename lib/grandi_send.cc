@@ -281,8 +281,8 @@ void sendExecute(napi_env env, void *data) {
 
   NDIlib_send_create_t NDI_send_create_desc{};
 
-  NDI_send_create_desc.p_ndi_name = c->name;
-  NDI_send_create_desc.p_groups = c->groups;
+  NDI_send_create_desc.p_ndi_name = c->name.get();
+  NDI_send_create_desc.p_groups = c->groups.get();
   NDI_send_create_desc.clock_video = c->clockVideo;
   NDI_send_create_desc.clock_audio = c->clockAudio;
   c->send = NDIlib_send_create(&NDI_send_create_desc);
@@ -345,6 +345,13 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data) {
 
   napi_value embedded;
   nativeHandle *handle = createNativeHandle(c->send, destroySendInstance);
+  if (handle == nullptr) {
+    destroySendInstance(c->send);
+    c->send = nullptr;
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    c->errorMsg = "Failed to allocate Sender handle.";
+    REJECT_STATUS;
+  }
   c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
                                    &embedded);
   if (c->status != napi_ok) {
@@ -406,14 +413,15 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
 
   napi_value name, groups, clockVideo, clockAudio;
-  c->status = napi_create_string_utf8(env, c->name, NAPI_AUTO_LENGTH, &name);
+  c->status =
+      napi_create_string_utf8(env, c->name.get(), NAPI_AUTO_LENGTH, &name);
   REJECT_STATUS;
   c->status = napi_set_named_property(env, result, "name", name);
   REJECT_STATUS;
 
   if (c->groups != nullptr) {
-    c->status =
-        napi_create_string_utf8(env, c->groups, NAPI_AUTO_LENGTH, &groups);
+    c->status = napi_create_string_utf8(env, c->groups.get(), NAPI_AUTO_LENGTH,
+                                        &groups);
     REJECT_STATUS;
     c->status = napi_set_named_property(env, result, "groups", groups);
     REJECT_STATUS;
@@ -438,7 +446,9 @@ void sendComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 napi_value send(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  sendCarrier *c = new sendCarrier;
+  sendCarrier *c = createCarrier<sendCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -474,12 +484,8 @@ napi_value send(napi_env env, napi_callback_info info) {
   if (type != napi_string)
     REJECT_ERROR_RETURN("Name property must be of type string.",
                         GRANDI_INVALID_ARGS);
-  size_t namel;
-  c->status = napi_get_value_string_utf8(env, name, nullptr, 0, &namel);
-  REJECT_RETURN;
-  c->name = (char *)malloc(namel + 1);
-  c->status = napi_get_value_string_utf8(env, name, c->name, namel + 1, &namel);
-  REJECT_RETURN;
+  if (!readUtf8String(env, name, &c->name, c))
+    REJECT_RETURN;
 
   c->status = napi_get_named_property(env, config, "groups", &groups);
   REJECT_RETURN;
@@ -489,13 +495,8 @@ napi_value send(napi_env env, napi_callback_info info) {
     if (type != napi_string)
       REJECT_ERROR_RETURN("Groups value must be a string when provided.",
                           GRANDI_INVALID_ARGS);
-    size_t groupsLen;
-    c->status = napi_get_value_string_utf8(env, groups, nullptr, 0, &groupsLen);
-    REJECT_RETURN;
-    c->groups = (char *)malloc(groupsLen + 1);
-    c->status = napi_get_value_string_utf8(env, groups, c->groups,
-                                           groupsLen + 1, &groupsLen);
-    REJECT_RETURN;
+    if (!readUtf8String(env, groups, &c->groups, c))
+      REJECT_RETURN;
   }
 
   c->status = napi_get_named_property(env, config, "clockVideo", &clockVideo);
@@ -568,7 +569,9 @@ void videoSendComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 napi_value videoSend(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  sendDataCarrier *c = new sendDataCarrier;
+  sendDataCarrier *c = createCarrier<sendDataCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -786,7 +789,9 @@ void audioSendComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 napi_value audioSend(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  sendDataCarrier *c = new sendDataCarrier;
+  sendDataCarrier *c = createCarrier<sendDataCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);

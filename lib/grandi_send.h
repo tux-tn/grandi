@@ -23,15 +23,11 @@
 napi_value send(napi_env env, napi_callback_info info);
 
 struct sendCarrier : carrier {
-  char *name = nullptr;
-  char *groups = nullptr;
+  std::unique_ptr<char[]> name;
+  std::unique_ptr<char[]> groups;
   bool clockVideo = false;
   bool clockAudio = false;
   NDIlib_send_instance_t send;
-  ~sendCarrier() {
-    free(name);
-    free(groups);
-  }
 };
 
 struct sendDataCarrier : carrier {

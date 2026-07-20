@@ -17,7 +17,9 @@
 #define GRANDI_UTIL_H
 
 #include <chrono>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <stdio.h>
 #include <string>
 #include <Processing.NDI.Lib.h>
@@ -88,6 +90,17 @@ struct carrier {
   napi_deferred _deferred;
   napi_async_work _request = nullptr;
 };
+
+template <typename T> T *createCarrier(napi_env env) {
+  T *value = new (std::nothrow) T;
+  if (value == nullptr)
+    napi_throw_error(env, nullptr,
+                     "Failed to allocate native operation state.");
+  return value;
+}
+
+bool readUtf8String(napi_env env, napi_value value,
+                    std::unique_ptr<char[]> *result, carrier *c);
 
 struct ownedBuffer {
   void *data = nullptr;
@@ -184,8 +197,13 @@ napi_status parseUint32Value(napi_env env, napi_value value,
 
 size_t videoDataSize(const NDIlib_video_frame_v2_t &frame);
 
+struct nativeSource {
+  NDIlib_source_t value{};
+  std::unique_ptr<char[]> name;
+  std::unique_ptr<char[]> urlAddress;
+};
+
 napi_status makeNativeSource(napi_env env, napi_value source,
-                             NDIlib_source_t *result);
-void freeNativeSource(NDIlib_source_t *source);
+                             nativeSource *result);
 
 #endif // GRANDI_UTIL_H

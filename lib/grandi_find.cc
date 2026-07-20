@@ -77,8 +77,8 @@ void findExecute(napi_env env, void *data) {
   findCarrier *c = (findCarrier *)data;
   NDIlib_find_create_t findConfig;
   findConfig.show_local_sources = c->show_local_sources;
-  findConfig.p_groups = c->groups;
-  findConfig.p_extra_ips = c->extra_ips;
+  findConfig.p_groups = c->groups.get();
+  findConfig.p_extra_ips = c->extraIps.get();
   c->find = NDIlib_find_create_v2(&findConfig);
   if (!c->find) {
     c->status = GRANDI_FIND_CREATE_FAIL;
@@ -106,6 +106,13 @@ void findComplete(napi_env env, napi_status asyncStatus, void *data) {
   /*  embed the native find object  */
   napi_value embedded;
   nativeHandle *handle = createNativeHandle(c->find, destroyFindInstance);
+  if (handle == nullptr) {
+    destroyFindInstance(c->find);
+    c->find = nullptr;
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    c->errorMsg = "Failed to allocate Finder handle.";
+    REJECT_STATUS;
+  }
   c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
                                    &embedded);
   if (c->status != napi_ok) {
@@ -149,7 +156,9 @@ void findComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 /*  the API method "find()"  */
 napi_value find(napi_env env, napi_callback_info info) {
-  findCarrier *c = new findCarrier;
+  findCarrier *c = createCarrier<findCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
   napi_valuetype type;
 
   /*  create result promise  */
@@ -201,13 +210,8 @@ napi_value find(napi_env env, napi_callback_info info) {
       REJECT_ERROR_RETURN(
           "Optional groups property must be a string when present.",
           GRANDI_INVALID_ARGS);
-    size_t groupsl;
-    c->status = napi_get_value_string_utf8(env, groups, nullptr, 0, &groupsl);
-    REJECT_RETURN;
-    c->groups = (char *)malloc(groupsl + 1);
-    c->status = napi_get_value_string_utf8(env, groups, c->groups, groupsl + 1,
-                                           &groupsl);
-    REJECT_RETURN;
+    if (!readUtf8String(env, groups, &c->groups, c))
+      REJECT_RETURN;
   }
 
   /*  fetch "extraIPs" property  */
@@ -220,14 +224,8 @@ napi_value find(napi_env env, napi_callback_info info) {
       REJECT_ERROR_RETURN(
           "Optional extraIPs property must be a string when present.",
           GRANDI_INVALID_ARGS);
-    size_t extraIPsl;
-    c->status =
-        napi_get_value_string_utf8(env, extraIPs, nullptr, 0, &extraIPsl);
-    REJECT_RETURN;
-    c->extra_ips = (char *)malloc(extraIPsl + 1);
-    c->status = napi_get_value_string_utf8(env, extraIPs, c->extra_ips,
-                                           extraIPsl + 1, &extraIPsl);
-    REJECT_RETURN;
+    if (!readUtf8String(env, extraIPs, &c->extraIps, c))
+      REJECT_RETURN;
   }
 
   /*  create an internal async resource  */
@@ -365,7 +363,9 @@ void findWaitComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 /*  API method "find.wait()"  */
 napi_value find_wait(napi_env env, napi_callback_info info) {
-  findWaitCarrier *c = new findWaitCarrier;
+  findWaitCarrier *c = createCarrier<findWaitCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);

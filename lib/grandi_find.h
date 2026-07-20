@@ -25,15 +25,9 @@ napi_value find(napi_env, napi_callback_info);
 struct findCarrier : carrier {
 
   bool show_local_sources = true;
-  char *groups = nullptr;
-  char *extra_ips = nullptr;
+  std::unique_ptr<char[]> groups;
+  std::unique_ptr<char[]> extraIps;
   NDIlib_find_instance_t find = nullptr;
-  ~findCarrier() {
-    if (groups != nullptr)
-      free(groups);
-    if (extra_ips != nullptr)
-      free(extra_ips);
-  }
 };
 
 struct findWaitCarrier : carrier {

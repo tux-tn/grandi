@@ -367,12 +367,11 @@ void receiveExecute(napi_env env, void *data) {
   receiveCarrier *c = (receiveCarrier *)data;
 
   NDIlib_recv_create_v3_t receiveConfig{};
-  receiveConfig.source_to_connect_to =
-      c->source != nullptr ? *c->source : NDIlib_source_t();
+  receiveConfig.source_to_connect_to = c->source.value;
   receiveConfig.color_format = c->colorFormat;
   receiveConfig.bandwidth = c->bandwidth;
   receiveConfig.allow_video_fields = c->allowVideoFields;
-  receiveConfig.p_ndi_recv_name = c->name;
+  receiveConfig.p_ndi_recv_name = c->name.get();
 
   c->recv = NDIlib_recv_create_v3(&receiveConfig);
   if (!c->recv) {
@@ -397,6 +396,13 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
 
   napi_value embedded;
   nativeHandle *handle = createNativeHandle(c->recv, destroyRecvInstance);
+  if (handle == nullptr) {
+    destroyRecvInstance(c->recv);
+    c->recv = nullptr;
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    c->errorMsg = "Failed to allocate Receiver handle.";
+    REJECT_STATUS;
+  }
   c->status =
       napi_create_external(env, handle, finalizeReceive, nullptr, &embedded);
   if (c->status != napi_ok) {
@@ -473,12 +479,12 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
 
   napi_value source, name;
-  c->status = napi_create_string_utf8(env, c->source->p_ndi_name,
+  c->status = napi_create_string_utf8(env, c->source.value.p_ndi_name,
                                       NAPI_AUTO_LENGTH, &name);
   REJECT_STATUS;
   napi_value uri;
-  if (c->source->p_url_address != NULL) {
-    c->status = napi_create_string_utf8(env, c->source->p_url_address,
+  if (c->source.value.p_url_address != nullptr) {
+    c->status = napi_create_string_utf8(env, c->source.value.p_url_address,
                                         NAPI_AUTO_LENGTH, &uri);
     REJECT_STATUS;
   }
@@ -486,7 +492,7 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
   c->status = napi_set_named_property(env, source, "name", name);
   REJECT_STATUS;
-  if (c->source->p_url_address != NULL) {
+  if (c->source.value.p_url_address != nullptr) {
     c->status = napi_set_named_property(env, source, "urlAddress", uri);
     REJECT_STATUS;
   }
@@ -513,7 +519,8 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
   REJECT_STATUS;
 
   if (c->name != nullptr) {
-    c->status = napi_create_string_utf8(env, c->name, NAPI_AUTO_LENGTH, &name);
+    c->status =
+        napi_create_string_utf8(env, c->name.get(), NAPI_AUTO_LENGTH, &name);
     REJECT_STATUS;
     c->status = napi_set_named_property(env, result, "name", name);
     REJECT_STATUS;
@@ -528,7 +535,9 @@ void receiveComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 napi_value receive(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  receiveCarrier *c = new receiveCarrier;
+  receiveCarrier *c = createCarrier<receiveCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -587,8 +596,7 @@ napi_value receive(napi_env env, napi_callback_info info) {
         "Source 'urlAddress' sub-property must be of type string.",
         GRANDI_INVALID_ARGS);
 
-  c->source = new NDIlib_source_t();
-  c->status = makeNativeSource(env, source, c->source);
+  c->status = makeNativeSource(env, source, &c->source);
   REJECT_RETURN;
 
   c->status = napi_get_named_property(env, config, "colorFormat", &colorFormat);
@@ -659,13 +667,8 @@ napi_value receive(napi_env env, napi_callback_info info) {
       REJECT_ERROR_RETURN(
           "Optional name property must be a string when present.",
           GRANDI_INVALID_ARGS);
-    size_t namel;
-    c->status = napi_get_value_string_utf8(env, name, nullptr, 0, &namel);
-    REJECT_RETURN;
-    c->name = (char *)malloc(namel + 1);
-    c->status =
-        napi_get_value_string_utf8(env, name, c->name, namel + 1, &namel);
-    REJECT_RETURN;
+    if (!readUtf8String(env, name, &c->name, c))
+      REJECT_RETURN;
   }
 
   napi_value resource_name;
@@ -996,7 +999,9 @@ napi_value setReceiveTally(napi_env env, napi_callback_info info) {
 }
 
 napi_value videoReceive(napi_env env, napi_callback_info info) {
-  dataCarrier *c = new dataCarrier;
+  dataCarrier *c = createCarrier<dataCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -1145,7 +1150,9 @@ napi_value dataAndAudioReceive(napi_env env, napi_callback_info info,
                                napi_async_execute_callback execute,
                                napi_async_complete_callback complete) {
   napi_valuetype type;
-  dataCarrier *c = new dataCarrier;
+  dataCarrier *c = createCarrier<dataCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -1299,7 +1306,9 @@ void metadataReceiveComplete(napi_env env, napi_status asyncStatus,
 }
 
 napi_value metadataReceive(napi_env env, napi_callback_info info) {
-  dataCarrier *c = new dataCarrier;
+  dataCarrier *c = createCarrier<dataCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);

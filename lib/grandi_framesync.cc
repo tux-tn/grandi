@@ -355,7 +355,14 @@ void framesyncComplete(napi_env env, napi_status asyncStatus, void *data) {
   c->status = napi_create_object(env, &result);
   REJECT_STATUS;
 
-  framesyncWrapper *wrapper = new framesyncWrapper;
+  framesyncWrapper *wrapper = new (std::nothrow) framesyncWrapper;
+  if (wrapper == nullptr) {
+    NDIlib_framesync_destroy(c->fs);
+    c->fs = nullptr;
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    c->errorMsg = "Failed to allocate FrameSync state.";
+    REJECT_STATUS;
+  }
   wrapper->env = env;
   wrapper->fs = c->fs;
   wrapper->receiverRef = c->passthru;
@@ -546,7 +553,9 @@ void framesyncVideoComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 napi_value framesyncVideo(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  framesyncVideoCarrier *c = new framesyncVideoCarrier;
+  framesyncVideoCarrier *c = createCarrier<framesyncVideoCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -682,7 +691,9 @@ void framesyncAudioComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 napi_value framesyncAudio(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  framesyncAudioCarrier *c = new framesyncAudioCarrier;
+  framesyncAudioCarrier *c = createCarrier<framesyncAudioCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);
@@ -767,7 +778,9 @@ napi_value framesyncAudio(napi_env env, napi_callback_info info) {
 
 napi_value framesync(napi_env env, napi_callback_info info) {
   napi_valuetype type;
-  framesyncCarrier *c = new framesyncCarrier;
+  framesyncCarrier *c = createCarrier<framesyncCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
 
   napi_value promise;
   c->status = napi_create_promise(env, &c->_deferred, &promise);

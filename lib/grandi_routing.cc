@@ -81,8 +81,8 @@ bool getRoutingInstanceFromThis(napi_env env, napi_value thisValue,
 void routingExecute(napi_env env, void *data) {
   routingCarrier *c = (routingCarrier *)data;
   NDIlib_routing_create_t routingConfig;
-  routingConfig.p_ndi_name = c->name;
-  routingConfig.p_groups = c->groups;
+  routingConfig.p_ndi_name = c->name.get();
+  routingConfig.p_groups = c->groups.get();
   c->routing = NDIlib_routing_create(&routingConfig);
   if (!c->routing) {
     c->status = GRANDI_ROUTING_CREATE_FAIL;
@@ -110,6 +110,13 @@ void routingComplete(napi_env env, napi_status asyncStatus, void *data) {
   /*  embed the native routing object  */
   napi_value embedded;
   nativeHandle *handle = createNativeHandle(c->routing, destroyRoutingInstance);
+  if (handle == nullptr) {
+    destroyRoutingInstance(c->routing);
+    c->routing = nullptr;
+    c->status = GRANDI_ALLOCATION_FAILURE;
+    c->errorMsg = "Failed to allocate Routing handle.";
+    REJECT_STATUS;
+  }
   c->status = napi_create_external(env, handle, finalizeNativeHandle, nullptr,
                                    &embedded);
   if (c->status != napi_ok) {
@@ -123,7 +130,8 @@ void routingComplete(napi_env env, napi_status asyncStatus, void *data) {
   /*  create "name" property  */
   napi_value name;
   if (c->name != nullptr) {
-    c->status = napi_create_string_utf8(env, c->name, NAPI_AUTO_LENGTH, &name);
+    c->status =
+        napi_create_string_utf8(env, c->name.get(), NAPI_AUTO_LENGTH, &name);
     REJECT_STATUS;
     c->status = napi_set_named_property(env, result, "name", name);
     REJECT_STATUS;
@@ -132,8 +140,8 @@ void routingComplete(napi_env env, napi_status asyncStatus, void *data) {
   /*  create "groups" property  */
   napi_value groups;
   if (c->groups != nullptr) {
-    c->status =
-        napi_create_string_utf8(env, c->groups, NAPI_AUTO_LENGTH, &groups);
+    c->status = napi_create_string_utf8(env, c->groups.get(), NAPI_AUTO_LENGTH,
+                                        &groups);
     REJECT_STATUS;
     c->status = napi_set_named_property(env, result, "groups", groups);
     REJECT_STATUS;
@@ -186,7 +194,9 @@ void routingComplete(napi_env env, napi_status asyncStatus, void *data) {
 
 /*  the API method "routing()"  */
 napi_value routing(napi_env env, napi_callback_info info) {
-  routingCarrier *c = new routingCarrier;
+  routingCarrier *c = createCarrier<routingCarrier>(env);
+  if (c == nullptr)
+    return nullptr;
   napi_valuetype type;
 
   /*  create result promise  */
@@ -222,13 +232,8 @@ napi_value routing(napi_env env, napi_callback_info info) {
       REJECT_ERROR_RETURN(
           "Optional name property must be a string when present.",
           GRANDI_INVALID_ARGS);
-    size_t namel;
-    c->status = napi_get_value_string_utf8(env, name, nullptr, 0, &namel);
-    REJECT_RETURN;
-    c->name = (char *)malloc(namel + 1);
-    c->status =
-        napi_get_value_string_utf8(env, name, c->name, namel + 1, &namel);
-    REJECT_RETURN;
+    if (!readUtf8String(env, name, &c->name, c))
+      REJECT_RETURN;
   }
 
   /*  fetch "groups" property  */
@@ -241,13 +246,8 @@ napi_value routing(napi_env env, napi_callback_info info) {
       REJECT_ERROR_RETURN(
           "Optional groups property must be a string when present.",
           GRANDI_INVALID_ARGS);
-    size_t groupsl;
-    c->status = napi_get_value_string_utf8(env, groups, nullptr, 0, &groupsl);
-    REJECT_RETURN;
-    c->groups = (char *)malloc(groupsl + 1);
-    c->status = napi_get_value_string_utf8(env, groups, c->groups, groupsl + 1,
-                                           &groupsl);
-    REJECT_RETURN;
+    if (!readUtf8String(env, groups, &c->groups, c))
+      REJECT_RETURN;
   }
 
   /*  create an internal async resource  */
@@ -357,15 +357,12 @@ napi_value routing_change(napi_env env, napi_callback_info info) {
     NAPI_THROW_ERROR("Source 'urlAddress' sub-property must be of type string.")
 
   /*  create NDI native source object  */
-  NDIlib_source_t ndi_source{};
-  status = makeNativeSource(env, source, &ndi_source);
+  nativeSource ndiSource;
+  status = makeNativeSource(env, source, &ndiSource);
   CHECK_STATUS;
 
   /*  call NDI API functionality  */
-  int ok = NDIlib_routing_change(routing, &ndi_source);
-
-  /*  cleanup resource  */
-  freeNativeSource(&ndi_source);
+  int ok = NDIlib_routing_change(routing, &ndiSource.value);
 
   /*  return a boolean result  */
   napi_value result;
