@@ -392,6 +392,50 @@ describe("grandi native addon (integration)", () => {
 			sender.destroy();
 		}
 	}, 120_000);
+	test("targeted video capture preserves queued metadata", async () => {
+		const senderName = `grandi-targeted-capture-${Date.now()}`;
+		const sender = await grandi.send({
+			name: senderName,
+			clockVideo: true,
+			clockAudio: false,
+		});
+		const controller = { running: true };
+		const pumpTask = pumpFrames(sender, controller);
+		let receiver: Receiver | undefined;
+
+		try {
+			const source = await waitForSourceByName(senderName);
+			receiver = await grandi.receive({
+				source,
+				name: `${senderName}-receiver`,
+				colorFormat: grandi.ColorFormat.BGRX_BGRA,
+			});
+			await waitForVideoFrameSize(receiver, { xres: 64, yres: 36 });
+
+			controller.running = false;
+			await pumpTask;
+
+			for (let attempt = 0; attempt < 100; attempt++) {
+				const frame = await receiver.data(0);
+				if (frame.type === "timeout") break;
+				if (attempt === 99)
+					throw new Error("Timed out draining the receiver queue");
+			}
+
+			expect(sender.metadata("<test>preserved</test>")).toBe(true);
+			await sleep(100);
+
+			await expect(receiver.video(0)).rejects.toThrow();
+			const metadata = await receiver.metadata(1_000);
+			expect(metadata.data).toContain("<test>preserved</test>");
+		} finally {
+			controller.running = false;
+			await pumpTask;
+			receiver?.destroy();
+			sender.destroy();
+		}
+	}, 120_000);
+
 
 	test("receives interleaved audio through data()", async () => {
 		const senderName = `grandi-data-audio-${Date.now()}`;

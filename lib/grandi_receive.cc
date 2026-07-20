@@ -228,10 +228,16 @@ bool captureUntilFrame(dataCarrier *c, NDIlib_frame_type_e desired,
                        const char *timeoutMsg, const char *connectionMsg) {
   auto start = std::chrono::steady_clock::now();
   uint32_t waitMs = initialWait;
+  NDIlib_video_frame_v2_t *videoFrame =
+      desired == NDIlib_frame_type_video ? &c->videoFrame : nullptr;
+  NDIlib_audio_frame_v3_t *audioFrame =
+      desired == NDIlib_frame_type_audio ? &c->audioFrame : nullptr;
+  NDIlib_metadata_frame_t *metadataFrame =
+      desired == NDIlib_frame_type_metadata ? &c->metadataFrame : nullptr;
 
   while (true) {
     NDIlib_frame_type_e frameType = NDIlib_recv_capture_v3(
-        c->recv, &c->videoFrame, &c->audioFrame, &c->metadataFrame, waitMs);
+        c->recv, videoFrame, audioFrame, metadataFrame, waitMs);
 
     if (frameType == desired)
       return true;
