@@ -167,7 +167,7 @@ Modes:
 Notes:
   - Requires a working local NDI environment.
   - Creates a sender + receiver on the same machine.
-  - Measures send/receive rates and best-effort video latency using a monotonic clock.
+  - Measures loopback video latency from the NDI receive timestamp, aligned to the local monotonic clock.
   - Seeds the first audio/video timecode at 0n, then lets NDI synthesize subsequent timecodes.
   - For stable long runs at 1080p, run with --expose-gc (pnpm bench does this) so buffers can be reclaimed.
 `);
@@ -269,8 +269,7 @@ async function main() {
 		let recvAudioBytes = 0;
 		const maxLatencySamples = 50_000;
 		const videoLatenciesMs = new Float64Array(maxLatencySamples);
-		// Ring of monotonic send timestamps (bigint ns) keyed by frame sequence.
-		const sendStamps = new BigInt64Array(maxLatencySamples);
+		const monotonicToUnixNs = BigInt(Date.now()) * 1_000_000n - hrtimeNs();
 		let videoLatencyCount = 0;
 		const gcState = { lastGcMs: 0, gcEveryMs: args.gcEveryMs };
 
@@ -296,10 +295,6 @@ async function main() {
 				const frameTimecode = firstFrame ? 0n : grandi.TIMECODE_SYNTHESIZE;
 				videoFrame.timecode = frameTimecode;
 				audioFrame.timecode = frameTimecode;
-
-				const sendStamp = hrtimeNs();
-				const seq = sendVideoCount;
-				if (seq < maxLatencySamples) sendStamps[seq] = sendStamp;
 
 				const videoStart = hrtimeNs();
 				const audioPromise = args.audio
@@ -353,12 +348,15 @@ async function main() {
 
 					recvVideoCount += 1;
 					recvVideoBytes += frame.data.length;
-					const seq = recvVideoCount - 1;
-					if (seq < maxLatencySamples) {
-						const sentNs = sendStamps[seq];
-						const latency = Number(hrtimeNs() - sentNs) / 1e6;
-						if (videoLatencyCount < maxLatencySamples) {
-							videoLatenciesMs[videoLatencyCount++] = latency;
+					if (
+						frame.timestamp !== undefined &&
+						videoLatencyCount < maxLatencySamples
+					) {
+						const receivedAtUnixNs = hrtimeNs() + monotonicToUnixNs;
+						const submittedAtUnixNs = frame.timestamp * 100n;
+						const latencyNs = receivedAtUnixNs - submittedAtUnixNs;
+						if (latencyNs >= 0n) {
+							videoLatenciesMs[videoLatencyCount++] = Number(latencyNs) / 1e6;
 						}
 					}
 				} else if (!args.framesync && args.audio && frame.type === "audio") {
