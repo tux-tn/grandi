@@ -168,8 +168,9 @@ export const version = addon.version;
  */
 export const isSupportedCPU = addon.isSupportedCPU;
 /**
- * Initializes the NDI library. Must be called before using any other NDI functions.
- * @returns {boolean} True if initialization was successful, false otherwise.
+ * Optionally initializes the process-global NDI library. The SDK does not require
+ * this call, but eager initialization is recommended for explicit lifecycle management.
+ * @returns {boolean} True if initialization was successful and the CPU is supported.
  *
  * @example
  * ```js
@@ -179,9 +180,9 @@ export const isSupportedCPU = addon.isSupportedCPU;
  */
 export const initialize = addon.initialize;
 /**
- * Destroys the NDI library instance and cleans up resources.
- * Should be called when done using NDI to free resources.
- * @returns {boolean} True if destruction was successful, false otherwise.
+ * Optionally shuts down the process-global NDI library.
+ * When managing the lifecycle explicitly, destroy all native objects before calling this.
+ * @returns {boolean} True after requesting shutdown.
  *
  * @example
  * ```js
