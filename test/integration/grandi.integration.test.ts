@@ -272,7 +272,7 @@ describe("grandi native addon (integration)", () => {
 				5000,
 			);
 			assertReceivedVideoFrame(frame);
-			const connections = await sender.connections();
+			const connections = sender.connections();
 			expect(connections).toBeGreaterThanOrEqual(1);
 
 			const tallyInitial = sender.tally();
