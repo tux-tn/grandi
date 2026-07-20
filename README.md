@@ -251,6 +251,8 @@ receiver.destroy(); // then destroy the receiver
 
 Notes:
 - `fs.video()` and `fs.audio()` always return immediately; they may duplicate/drop frames to match your call rate.
+- While a frame-sync exists, use it for video and audio. Direct `receiver.video()`, `audio()`, and `data()` captures are rejected; metadata and receiver control methods such as `tally()` remain available.
+- A receiver can be bound to only one frame-sync at a time. Direct capture becomes available again after destroying it.
 - `fs.audio()` requires positive `samples`; omit `sampleRate` or `channels` to use the incoming format. The legacy `noSamples` and `noChannels` names remain supported.
 - Always destroy the frame-sync before destroying the receiver it wraps.
 
