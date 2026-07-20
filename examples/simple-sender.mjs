@@ -39,40 +39,43 @@ async function main() {
 		running = false;
 	});
 
-	while (running) {
-		await Promise.all([
-			sender.video({
-				type: "video",
-				xres: WIDTH,
-				yres: HEIGHT,
-				frameRateN: FPS_N,
-				frameRateD: FPS_D,
-				colorFormat: grandi.ColorFormat.Fastest,
-				pictureAspectRatio: WIDTH / HEIGHT,
-				frameFormatType: grandi.FrameType.Progressive,
-				lineStrideBytes: WIDTH * 4,
-				data: WHITE_BUFFER,
-				fourCC: grandi.FourCC.BGRA,
-				timecode: grandi.TIMECODE_SYNTHESIZE,
-			}),
-			sender.audio({
-				type: "audio",
-				sampleRate: SAMPLE_RATE,
-				noChannels: CHANNELS,
-				noSamples: SAMPLES_PER_FRAME,
-				channelStrideBytes: CHANNEL_STRIDE_BYTES,
-				data: SILENT_AUDIO,
-				fourCC: grandi.FourCC.FLTp,
-				timecode: grandi.TIMECODE_SYNTHESIZE,
-			}),
-		]);
+	try {
+		while (running) {
+			await Promise.all([
+				sender.video({
+					type: "video",
+					xres: WIDTH,
+					yres: HEIGHT,
+					frameRateN: FPS_N,
+					frameRateD: FPS_D,
+					colorFormat: grandi.ColorFormat.Fastest,
+					pictureAspectRatio: WIDTH / HEIGHT,
+					frameFormatType: grandi.FrameType.Progressive,
+					lineStrideBytes: WIDTH * 4,
+					data: WHITE_BUFFER,
+					fourCC: grandi.FourCC.BGRA,
+					timecode: grandi.TIMECODE_SYNTHESIZE,
+				}),
+				sender.audio({
+					type: "audio",
+					sampleRate: SAMPLE_RATE,
+					noChannels: CHANNELS,
+					noSamples: SAMPLES_PER_FRAME,
+					channelStrideBytes: CHANNEL_STRIDE_BYTES,
+					data: SILENT_AUDIO,
+					fourCC: grandi.FourCC.FLTp,
+					timecode: grandi.TIMECODE_SYNTHESIZE,
+				}),
+			]);
 
-		sender.metadata("<title>Grandi Example</title>");
+			sender.metadata("<title>Grandi Example</title>");
 
-		await sleep((1000 * FPS_D) / FPS_N);
+			await sleep((1000 * FPS_D) / FPS_N);
+		}
+	} finally {
+		sender.destroy();
+		grandi.destroy();
 	}
-
-	grandi.destroy();
 	console.log("Sender stopped.");
 }
 
