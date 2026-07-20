@@ -135,7 +135,7 @@ const noopAddon: GrandiAddon = {
 const addon: GrandiAddon = loadAddon();
 /**
  * Creates a finder to discover NDI sources on the network.
- * @param {FindOptions} [params={}] - Options for finding sources.
+ * @param {FindOptions} params - Options for finding sources.
  * @param {boolean} [params.showLocalSources] - Whether to show local sources.
  * @param {string} [params.groups] - Multicast groups to search in.
  * @param {string} [params.extraIPs] - Additional IP addresses to search.

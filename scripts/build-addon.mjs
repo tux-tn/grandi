@@ -348,7 +348,7 @@ async function populatePackageLibs() {
 					err instanceof Error
 						? err.message
 						: err
-							? String(err)
+							? JSON.stringify(err)
 							: "Unknown error";
 				log.warn(`Failed to create ${linkName} symlink: ${message}`);
 			}
