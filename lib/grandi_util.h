@@ -89,17 +89,29 @@ struct carrier {
   napi_async_work _request = nullptr;
 };
 
+enum class nativeCaptureStatus {
+  success,
+  destroyed,
+  bound,
+  busy,
+};
+
 struct nativeHandle {
   void *value = nullptr;
   void (*destroy)(void *) = nullptr;
   bool closing = false;
   bool finalized = false;
+  bool captureBound = false;
   uint32_t active = 0;
   std::mutex mutex;
 };
 
 nativeHandle *createNativeHandle(void *value, void (*destroy)(void *));
 bool acquireNativeHandle(nativeHandle *handle, void **value);
+nativeCaptureStatus acquireNativeCaptureHandle(nativeHandle *handle,
+                                               void **value);
+nativeCaptureStatus bindNativeCaptureHandle(nativeHandle *handle, void **value);
+void releaseNativeCaptureBinding(nativeHandle *handle);
 void releaseNativeHandle(nativeHandle *handle);
 bool closeNativeHandle(nativeHandle *handle);
 void finalizeNativeHandle(napi_env env, void *data, void *hint);

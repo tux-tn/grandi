@@ -41,7 +41,7 @@ void destroyRecvInstance(void *value) {
 
 bool acquireRecvFromThis(napi_env env, napi_value thisValue,
                          nativeHandle **handle, NDIlib_recv_instance_t *recv,
-                         carrier *c) {
+                         carrier *c, bool allowFrameSyncBinding = false) {
   napi_value recvValue;
   c->status = napi_get_named_property(env, thisValue, "embedded", &recvValue);
   if (c->status != napi_ok)
@@ -61,9 +61,19 @@ bool acquireRecvFromThis(napi_env env, napi_value thisValue,
     return false;
   nativeHandle *native = (nativeHandle *)externalData;
   void *value;
-  if (!acquireNativeHandle(native, &value)) {
+  nativeCaptureStatus captureStatus = nativeCaptureStatus::destroyed;
+  if (allowFrameSyncBinding) {
+    if (acquireNativeHandle(native, &value))
+      captureStatus = nativeCaptureStatus::success;
+  } else {
+    captureStatus = acquireNativeCaptureHandle(native, &value);
+  }
+  if (captureStatus != nativeCaptureStatus::success) {
     c->status = GRANDI_INVALID_ARGS;
-    c->errorMsg = "Receiver has been destroyed.";
+    c->errorMsg =
+        captureStatus == nativeCaptureStatus::bound
+            ? "Receiver capture is unavailable while a FrameSync is active."
+            : "Receiver has been destroyed.";
     return false;
   }
   *handle = native;
@@ -1145,7 +1155,7 @@ napi_value metadataReceive(napi_env env, napi_callback_info info) {
   c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
   REJECT_RETURN;
 
-  if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c))
+  if (!acquireRecvFromThis(env, thisValue, &c->handle, &c->recv, c, true))
     REJECT_RETURN;
 
   if (argc >= 1) {

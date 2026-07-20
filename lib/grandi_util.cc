@@ -191,6 +191,46 @@ bool acquireNativeHandle(nativeHandle *handle, void **value) {
   *value = handle->value;
   return true;
 }
+nativeCaptureStatus acquireNativeCaptureHandle(nativeHandle *handle,
+                                               void **value) {
+  if (handle == nullptr)
+    return nativeCaptureStatus::destroyed;
+  std::lock_guard<std::mutex> lock(handle->mutex);
+  if (handle->closing || handle->value == nullptr)
+    return nativeCaptureStatus::destroyed;
+  if (handle->captureBound)
+    return nativeCaptureStatus::bound;
+  handle->active++;
+  *value = handle->value;
+  return nativeCaptureStatus::success;
+}
+
+nativeCaptureStatus bindNativeCaptureHandle(nativeHandle *handle,
+                                            void **value) {
+  if (handle == nullptr)
+    return nativeCaptureStatus::destroyed;
+  std::lock_guard<std::mutex> lock(handle->mutex);
+  if (handle->closing || handle->value == nullptr)
+    return nativeCaptureStatus::destroyed;
+  if (handle->captureBound)
+    return nativeCaptureStatus::bound;
+  if (handle->active != 0)
+    return nativeCaptureStatus::busy;
+  handle->captureBound = true;
+  handle->active++;
+  *value = handle->value;
+  return nativeCaptureStatus::success;
+}
+
+void releaseNativeCaptureBinding(nativeHandle *handle) {
+  if (handle == nullptr)
+    return;
+  {
+    std::lock_guard<std::mutex> lock(handle->mutex);
+    handle->captureBound = false;
+  }
+  releaseNativeHandle(handle);
+}
 
 void releaseNativeHandle(nativeHandle *handle) {
   if (handle == nullptr)

@@ -566,6 +566,19 @@ describe("grandi native addon (integration)", () => {
 				colorFormat: grandi.ColorFormat.Fastest,
 			});
 			fs = await grandi.framesync(receiver);
+			const boundError =
+				"Receiver capture is unavailable while a FrameSync is active.";
+			await expect(receiver.video(0)).rejects.toThrow(boundError);
+			await expect(receiver.audio(0)).rejects.toThrow(boundError);
+			expect(sender.metadata("<test>framesync-metadata</test>")).toBe(true);
+			const metadata = await receiver.metadata(1_000);
+			expect(metadata.data).toContain("<test>framesync-metadata</test>");
+			await expect(receiver.data(0)).rejects.toThrow(boundError);
+			await expect(grandi.framesync(receiver)).rejects.toThrow(
+				"Receiver is already bound to a FrameSync.",
+			);
+			expect(receiver.tally({ onProgram: false, onPreview: false })).toBe(true);
+
 			await expect(fs.audio({} as never)).rejects.toThrow(
 				"samples must be a number.",
 			);
@@ -613,6 +626,12 @@ describe("grandi native addon (integration)", () => {
 			expect(() => fs.audioQueueDepth()).toThrow(
 				"FrameSync has been destroyed.",
 			);
+			const resumedFrame = await waitForVideoFrameSize(
+				receiver,
+				{ xres: 64, yres: 36 },
+				5_000,
+			);
+			assertReceivedVideoFrame(resumedFrame);
 		} finally {
 			controller.running = false;
 			await pumpTask;

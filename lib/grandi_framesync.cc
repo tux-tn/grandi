@@ -40,7 +40,7 @@ struct framesyncCarrier : carrier {
   NDIlib_framesync_instance_t fs = nullptr;
   ~framesyncCarrier() {
     if (recvHandle != nullptr)
-      releaseNativeHandle(recvHandle);
+      releaseNativeCaptureBinding(recvHandle);
   }
 };
 
@@ -84,7 +84,7 @@ void closeFrameSyncWrapper(napi_env env, framesyncWrapper *wrapper) {
   if (receiverRefToDelete != nullptr)
     napi_delete_reference(env, receiverRefToDelete);
   if (recvHandleToRelease != nullptr)
-    releaseNativeHandle(recvHandleToRelease);
+    releaseNativeCaptureBinding(recvHandleToRelease);
 }
 
 bool acquireFrameSyncFromThis(napi_env env, napi_value thisValue,
@@ -146,7 +146,7 @@ void releaseFrameSyncWrapper(framesyncWrapper *wrapper) {
   if (receiverRefToDelete != nullptr)
     napi_delete_reference(wrapper->env, receiverRefToDelete);
   if (recvHandleToRelease != nullptr)
-    releaseNativeHandle(recvHandleToRelease);
+    releaseNativeCaptureBinding(recvHandleToRelease);
   if (deleteWrapper)
     delete wrapper;
 }
@@ -216,7 +216,7 @@ void finalizeFrameSync(napi_env env, void *data, void *hint) {
   if (receiverRefToDelete != nullptr)
     napi_delete_reference(env, receiverRefToDelete);
   if (recvHandleToRelease != nullptr)
-    releaseNativeHandle(recvHandleToRelease);
+    releaseNativeCaptureBinding(recvHandleToRelease);
   if (deleteWrapper)
     delete wrapper;
 }
@@ -809,8 +809,16 @@ napi_value framesync(napi_env env, napi_callback_info info) {
   REJECT_RETURN;
   nativeHandle *recvHandle = (nativeHandle *)externalData;
   void *recvData;
-  if (!acquireNativeHandle(recvHandle, &recvData))
-    REJECT_ERROR_RETURN("Receiver has been destroyed.", GRANDI_INVALID_ARGS);
+  nativeCaptureStatus captureStatus =
+      bindNativeCaptureHandle(recvHandle, &recvData);
+  if (captureStatus != nativeCaptureStatus::success) {
+    const char *message = "Receiver has been destroyed.";
+    if (captureStatus == nativeCaptureStatus::bound)
+      message = "Receiver is already bound to a FrameSync.";
+    else if (captureStatus == nativeCaptureStatus::busy)
+      message = "Receiver has active capture operations.";
+    REJECT_ERROR_RETURN(message, GRANDI_INVALID_ARGS);
+  }
   c->recvHandle = recvHandle;
   c->recv = (NDIlib_recv_instance_t)recvData;
 

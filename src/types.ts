@@ -361,9 +361,10 @@ export interface Grandi {
 	receive(params: ReceiveOptions): Promise<Receiver>;
 	/**
 	 * Creates an NDI frame-synchronizer (time base corrector) backed by an existing receiver.
-	 * Use this when you want smooth playback clocked to your own render/audio loop.
-	 *
-	 * Note: destroy the frame-sync before destroying the receiver.
+	 * While it exists, direct `video`, `audio`, and `data` captures on that
+	 * receiver are unavailable; metadata and control methods such as `tally` remain usable.
+	 * Destroy the frame-sync before the receiver. Direct capture becomes available
+	 * again after the frame-sync is destroyed.
 	 */
 	framesync(receiver: Receiver): Promise<FrameSync>;
 	/**
