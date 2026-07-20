@@ -11,7 +11,7 @@ import type {
 	Routing,
 	Sender,
 	SendOptions,
-} from "./types";
+} from "./types.js";
 import {
 	AudioFormat,
 	Bandwidth,
@@ -19,7 +19,7 @@ import {
 	FourCC,
 	FrameType,
 	TIMECODE_SYNTHESIZE,
-} from "./types";
+} from "./types.js";
 
 /**
  * Checks if the current platform and architecture are supported by NDI.
@@ -311,7 +311,7 @@ export type {
 	TimeoutEvent,
 	VideoFourCC,
 	VideoFrame,
-} from "./types";
+} from "./types.js";
 
 const grandi: Grandi = {
 	version,
