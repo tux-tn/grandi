@@ -379,6 +379,7 @@ async function buildAddon(packageDir) {
 			nodeGypBin,
 			"rebuild",
 			`--arch=${buildArch}`,
+			"--enable-pgo-use=false",
 			"--",
 			`-Dproduct_dir=${productDir}`,
 		],
