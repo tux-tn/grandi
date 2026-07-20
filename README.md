@@ -81,7 +81,7 @@ async function pickSource() {
   const finder = await grandi.find({ showLocalSources: true });
   try {
     for (let attempts = 0; attempts < 20; attempts++) {
-      finder.wait(250); // block for up to 250 ms of new announcements
+      await finder.wait(250); // asynchronously wait for new announcements
       const sources = finder.sources();
       if (sources.length > 0) return sources[0];
       await sleep(250);
@@ -422,7 +422,7 @@ Properties: `embedded`, `name`, `groups`, `clockVideo`, `clockAudio`.
 | Call | Returns | Purpose |
 | --- | --- | --- |
 | `sources()` | `Source[]` | Latest snapshot of discovered sources. |
-| `wait(timeoutMs?: number)` | `boolean` | Block for network updates up to the given timeout. |
+| `wait(timeoutMs?: number)` | `Promise<boolean>` | Asynchronously wait for network updates up to the given timeout without blocking the JavaScript thread. |
 | `destroy()` | `boolean` | Dispose the finder and background threads. |
 
 ### Options and helper types

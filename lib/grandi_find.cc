@@ -342,50 +342,67 @@ napi_value find_sources(napi_env env, napi_callback_info info) {
   return result;
 }
 
+void findWaitExecute(napi_env env, void *data) {
+  findWaitCarrier *c = (findWaitCarrier *)data;
+  c->changed = NDIlib_find_wait_for_sources(c->find, c->wait);
+}
+
+void findWaitComplete(napi_env env, napi_status asyncStatus, void *data) {
+  findWaitCarrier *c = (findWaitCarrier *)data;
+  if (asyncStatus != napi_ok) {
+    c->status = asyncStatus;
+    c->errorMsg = "Async finder wait failed to complete.";
+  }
+  REJECT_STATUS;
+
+  napi_value result;
+  c->status = napi_get_boolean(env, c->changed, &result);
+  REJECT_STATUS;
+  napi_status status = napi_resolve_deferred(env, c->_deferred, result);
+  FLOATING_STATUS;
+  tidyCarrier(env, c);
+}
+
 /*  API method "find.wait()"  */
 napi_value find_wait(napi_env env, napi_callback_info info) {
-  napi_status status;
+  findWaitCarrier *c = new findWaitCarrier;
 
-  /*  fetch arguments  */
-  size_t argc = 2;
-  napi_value args[2];
+  napi_value promise;
+  c->status = napi_create_promise(env, &c->_deferred, &promise);
+  REJECT_RETURN;
+
+  size_t argc = 1;
+  napi_value args[1];
   napi_value thisValue;
-  status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
-  CHECK_STATUS;
+  c->status = napi_get_cb_info(env, info, &argc, args, &thisValue, nullptr);
+  REJECT_RETURN;
 
-  /*  fetch embedded NDI native find object  */
-  napi_value embeddedValue;
-  status = napi_get_named_property(env, thisValue, "embedded", &embeddedValue);
-  CHECK_STATUS;
-  embeddedValue_t *embeddedData;
-  status = napi_get_value_external(env, embeddedValue, (void **)&embeddedData);
-  CHECK_STATUS;
-  NDIlib_find_instance_t find = (NDIlib_find_instance_t)(embeddedData->value);
-  if (find == nullptr)
-    NAPI_THROW_ERROR("Finder has been destroyed.");
+  if (!acquireFindFromThis(env, thisValue, &c->handle, &c->find, c))
+    REJECT_RETURN;
 
-  /*  handle optional "wait" argument  */
-  uint32_t wait = 10000;
   if (argc >= 1) {
     napi_valuetype type;
-    status = napi_typeof(env, args[0], &type);
-    CHECK_STATUS;
+    c->status = napi_typeof(env, args[0], &type);
+    REJECT_RETURN;
     if (type != napi_undefined) {
-      std::string error;
-      status = parseUint32Value(env, args[0], "timeoutMs", &wait, &error);
-      CHECK_STATUS;
-      if (!error.empty())
-        NAPI_THROW_ERROR(error.c_str());
+      c->status =
+          parseUint32Value(env, args[0], "timeoutMs", &c->wait, &c->errorMsg);
+      REJECT_RETURN;
+      if (!c->errorMsg.empty())
+        REJECT_ERROR_RETURN(c->errorMsg, GRANDI_INVALID_ARGS);
     }
   }
 
-  /*  call NDI API functionality  */
-  bool ok = NDIlib_find_wait_for_sources(find, wait);
+  napi_value resourceName;
+  c->status = napi_create_string_utf8(env, "FinderWait", NAPI_AUTO_LENGTH,
+                                      &resourceName);
+  REJECT_RETURN;
+  c->status =
+      napi_create_async_work(env, nullptr, resourceName, findWaitExecute,
+                             findWaitComplete, c, &c->_request);
+  REJECT_RETURN;
+  c->status = napi_queue_async_work(env, c->_request);
+  REJECT_RETURN;
 
-  /*  return a boolean result  */
-  napi_value result;
-  status = napi_get_boolean(env, ok, &result);
-  CHECK_STATUS;
-
-  return result;
+  return promise;
 }

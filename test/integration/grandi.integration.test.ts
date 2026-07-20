@@ -21,7 +21,7 @@ async function waitForSourceByName(
 	const deadline = Date.now() + timeoutMs;
 	try {
 		while (Date.now() < deadline) {
-			finder.wait(250);
+			await finder.wait(250);
 			const match = finder
 				.sources()
 				.find((source) => source.name.includes(name));
@@ -237,18 +237,27 @@ describe("grandi native addon (integration)", () => {
 		expect(finder.destroy()).toBe(true);
 	});
 
+	it("keeps in-flight finder waits alive when destroyed", async () => {
+		const finder = await grandi.find({ showLocalSources: true });
+		const pendingWait = finder.wait(50);
+		expect(finder.destroy()).toBe(true);
+		expect(typeof (await pendingWait)).toBe("boolean");
+		await expect(finder.wait(0)).rejects.toThrow("Finder has been destroyed.");
+		expect(() => finder.sources()).toThrow("Finder has been destroyed.");
+	});
+
 	it("honors finder options", { timeout: 15_000 }, async () => {
 		const finder = await grandi.find({
 			showLocalSources: false,
 			groups: "dummy-group",
 			extraIPs: "127.0.0.1",
 		});
-		expect(typeof finder.wait(50)).toBe("boolean");
+		expect(typeof (await finder.wait(50))).toBe("boolean");
 		const timeoutError =
 			"timeoutMs must be a finite integer between 0 and 4294967295.";
-		expect(() => finder.wait(-1)).toThrow(timeoutError);
-		expect(() => finder.wait(1.5)).toThrow(timeoutError);
-		expect(() => finder.wait("50" as never)).toThrow(timeoutError);
+		await expect(finder.wait(-1)).rejects.toThrow(timeoutError);
+		await expect(finder.wait(1.5)).rejects.toThrow(timeoutError);
+		await expect(finder.wait("50" as never)).rejects.toThrow(timeoutError);
 		expect(Array.isArray(finder.sources())).toBe(true);
 		expect(finder.destroy()).toBe(true);
 	});

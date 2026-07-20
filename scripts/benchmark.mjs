@@ -139,7 +139,7 @@ async function waitForSourceByName(grandi, name, timeoutMs = 15_000) {
 	const deadline = Date.now() + timeoutMs;
 	try {
 		while (Date.now() < deadline) {
-			finder.wait(250);
+			await finder.wait(250);
 			const match = finder
 				.sources()
 				.find((source) => source.name.includes(name));
