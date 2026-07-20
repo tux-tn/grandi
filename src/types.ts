@@ -64,11 +64,6 @@ export interface VideoFrame {
 	lineStrideBytes: number;
 	data: Buffer;
 	timecode?: Timecode;
-	/**
-	 * Receive-only timestamp filled by the NDI SDK (UTC time, 100ns units under the hood).
-	 * NDI ignores this field when sending.
-	 */
-	timestamp?: bigint;
 	metadata?: string;
 }
 
@@ -88,11 +83,6 @@ export interface AudioFrame {
 	data: Buffer;
 	fourCC: FourCC;
 	timecode?: Timecode;
-	/**
-	 * Receive-only timestamp filled by the NDI SDK (UTC time, 100ns units under the hood).
-	 * NDI ignores this field when sending.
-	 */
-	timestamp?: bigint;
 	metadata?: string;
 }
 
