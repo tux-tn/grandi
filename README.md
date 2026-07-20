@@ -357,7 +357,7 @@ Ready to hack on Grandi? Here’s the typical workflow.
 	- `npm run test:integration` exercises the native bindings against a real NDI environment;
   - `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
 6. **Linting & formatting**
-	- `npm run lint` / `npm run format` cover the TypeScript/JavaScript sources via Biome.
+	- `npm run lint` runs Oxlint; `npm run format` checks Oxfmt output, and `npm run format:fix` writes formatting changes.
 	- `npm run format:cpp` formats the native sources with `clang-format`.
 7. **Manual verification**
 	- `node examples/simple-sender.mjs` and `node examples/simple-receiver.mjs` are quick smoke tests for the send/receive API.
