@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { afterAll, beforeAll, describe, expect, it, test } from "vitest";
 
-import grandi from "../../src/index";
+import grandi from "../../src/index.js";
 import type {
 	FrameSync,
 	ReceivedAudioFrame,
@@ -11,7 +11,7 @@ import type {
 	Sender,
 	SenderTally,
 	Source,
-} from "../../src/types";
+} from "../../src/types.js";
 
 async function waitForSourceByName(
 	name: string,
@@ -643,7 +643,9 @@ describe("grandi native addon (integration)", () => {
 			});
 
 			expect(fs.destroy()).toBe(true);
-			expect(() => fs.audioQueueDepth()).toThrow(
+			const destroyedFrameSync = fs;
+			if (!destroyedFrameSync) throw new Error("FrameSync was not created.");
+			expect(() => destroyedFrameSync.audioQueueDepth()).toThrow(
 				"FrameSync has been destroyed.",
 			);
 			const resumedFrame = await waitForVideoFrameSize(
@@ -703,10 +705,14 @@ describe("grandi native addon (integration)", () => {
 
 			expect(routing.clear()).toBe(true);
 			expect(routing.destroy()).toBe(true);
-			expect(() => routing.connections()).toThrow(
+			const destroyedRouting = routing;
+			if (!destroyedRouting) throw new Error("Routing was not created.");
+			expect(() => destroyedRouting.connections()).toThrow(
 				"Routing has been destroyed.",
 			);
-			expect(() => routing.clear()).toThrow("Routing has been destroyed.");
+			expect(() => destroyedRouting.clear()).toThrow(
+				"Routing has been destroyed.",
+			);
 		} finally {
 			controller.running = false;
 			await pumpTask;
@@ -760,7 +766,9 @@ describe("grandi native addon (integration)", () => {
 			expect(fs.audioQueueDepth()).toBeGreaterThanOrEqual(0);
 
 			expect(fs.destroy()).toBe(true);
-			expect(() => fs.audioQueueDepth()).toThrow(
+			const destroyedFrameSync = fs;
+			if (!destroyedFrameSync) throw new Error("FrameSync was not created.");
+			expect(() => destroyedFrameSync.audioQueueDepth()).toThrow(
 				"FrameSync has been destroyed.",
 			);
 		} finally {
