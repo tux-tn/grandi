@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { GrandiAddon } from "../../src/index";
+import type { GrandiAddon } from "../../src/index.js";
 
 function mockProcessProperty<K extends "platform" | "arch">(
 	key: K,
@@ -94,7 +94,7 @@ describe("src/index entrypoint", () => {
 		restoreArch = mockProcessProperty("arch", "x64");
 		vi.doMock("node-gyp-build", () => ({ default: nodeGypBuild }));
 
-		const grandi = await import("../../src/index");
+		const grandi = await import("../../src/index.js");
 
 		expect(nodeGypBuild).toHaveBeenCalledTimes(1);
 		const firstCall = (nodeGypBuild.mock.calls[0] ?? []) as unknown[];
@@ -122,7 +122,7 @@ describe("src/index entrypoint", () => {
 		restoreArch = mockProcessProperty("arch", "arm64");
 		vi.doMock("node-gyp-build", () => ({ default: nodeGypBuild }));
 
-		const grandi = await import("../../src/index");
+		const grandi = await import("../../src/index.js");
 
 		expect(nodeGypBuild).not.toHaveBeenCalled();
 
@@ -143,7 +143,7 @@ describe("src/index entrypoint", () => {
 		restorePlatform = mockProcessProperty("platform", "linux");
 		restoreArch = mockProcessProperty("arch", "x64");
 		vi.doMock("node-gyp-build", () => ({ default: () => addon }));
-		const grandiModule = await import("../../src/index");
+		const grandiModule = await import("../../src/index.js");
 
 		const grandi = grandiModule.default;
 		expect(grandi.COLOR_FORMAT_BGRX_BGRA).toBe(
@@ -168,7 +168,7 @@ describe("src/index entrypoint", () => {
 		const nodeGypBuild = vi.fn(() => addon);
 		vi.doMock("node-gyp-build", () => ({ default: nodeGypBuild }));
 
-		const grandiModule = await import("../../src/index");
+		const grandiModule = await import("../../src/index.js");
 
 		expect(nodeGypBuild).toHaveBeenCalledTimes(0);
 		expect(grandiModule.version()).toBe("");
@@ -199,7 +199,7 @@ describe("src/index entrypoint", () => {
 		const nodeGypBuild = vi.fn(() => addon);
 		vi.doMock("node-gyp-build", () => ({ default: nodeGypBuild }));
 
-		const grandi = await import("../../src/index");
+		const grandi = await import("../../src/index.js");
 
 		const sendOpts = { name: "unit-sender", clockVideo: true } as const;
 		await grandi.send(sendOpts as never);
@@ -241,7 +241,7 @@ describe("src/index entrypoint", () => {
 				throw new Error("no local binding");
 			},
 		}));
-		const grandi = await import("../../src/index");
+		const grandi = await import("../../src/index.js");
 		await expect(grandi.find()).rejects.toThrow("Unsupported platform or CPU");
 	});
 });
