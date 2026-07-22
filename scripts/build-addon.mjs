@@ -359,6 +359,14 @@ async function populatePackageLibs() {
 	);
 }
 
+async function copyRuntimeLibraries(packageDir, outputDir) {
+	const files = await fs.readdir(packageDir);
+	for (const file of files) {
+		if (!file.startsWith("libndi.") && !file.endsWith(".dll")) continue;
+		shell.cp("-f", path.join(packageDir, file), outputDir);
+	}
+}
+
 async function buildAddon(packageDir) {
 	log.heading("Building native addon");
 	log.info(`Target: ${targetPlatform}/${targetArch}`);
@@ -399,6 +407,7 @@ async function buildAddon(packageDir) {
 	}
 	shell.cp("-f", built, productDir);
 	log.success(`Copied addon to ${productDir}/grandi.node`);
+	await copyRuntimeLibraries(packageDir, path.dirname(built));
 }
 
 async function main() {
