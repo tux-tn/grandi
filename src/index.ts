@@ -50,10 +50,15 @@ function tryRequireArchPackage(): GrandiAddon | null {
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		return require(pkg) as GrandiAddon;
-	} catch {
-		throw new Error(
+	} catch (cause) {
+		const packageError = new Error(
 			`Failed to find prebuilt package for ${archKey}. Please ensure that the package "${pkg}" is installed`,
 		);
+		Object.defineProperty(packageError, "cause", {
+			configurable: true,
+			value: cause,
+		});
+		throw packageError;
 	}
 }
 
@@ -78,18 +83,33 @@ function loadAddon(): GrandiAddon {
 	try {
 		const archAddon = tryRequireArchPackage();
 		if (archAddon) return archAddon;
+		loadErrors.push(
+			new Error(
+				`Prebuilt package for ${process.platform}-${process.arch} did not provide an addon`,
+			),
+		);
 	} catch (err) {
 		loadErrors.push(err as Error);
 	}
 
 	if (loadErrors.length > 0) {
-		const aggregateError = new Error(
+		const message =
 			"Failed to load native addon:\n" +
-				loadErrors.map((e, i) => `  [${i + 1}] ${e.message}`).join("\n"),
-		);
-		console.error(aggregateError);
+			loadErrors.map((e, i) => `  [${i + 1}] ${e.message}`).join("\n");
+		type AddonLoadError = Error & { errors: Error[] };
+		const AggregateErrorConstructor = (
+			globalThis as typeof globalThis & {
+				AggregateError?: new (
+					errors: Error[],
+					message: string,
+				) => AddonLoadError;
+			}
+		).AggregateError;
+		throw AggregateErrorConstructor
+			? new AggregateErrorConstructor(loadErrors, message)
+			: Object.assign(new Error(message), { errors: loadErrors });
 	}
-	return noopAddon;
+	throw new Error("Failed to load native addon");
 }
 
 export interface GrandiAddon {

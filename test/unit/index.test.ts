@@ -85,6 +85,11 @@ describe("src/index entrypoint", () => {
 		} catch {
 			// Module might not have been mocked in this test.
 		}
+		try {
+			vi.doUnmock("@grandi/linux-x64");
+		} catch {
+			// Module might not have been mocked in this test.
+		}
 	});
 
 	it("loads the compiled addon on supported platforms", async () => {
@@ -233,15 +238,35 @@ describe("src/index entrypoint", () => {
 		expect(addon.destroy).toHaveBeenCalled();
 	});
 
-	it("throws when arch map lacks a package", async () => {
+	it("retains supported-platform addon failures and their causes", async () => {
+		const localError = new Error("local binding is unavailable");
 		restorePlatform = mockProcessProperty("platform", "linux");
-		restoreArch = mockProcessProperty("arch", "mips" as typeof process.arch);
+		restoreArch = mockProcessProperty("arch", "arm64");
 		vi.doMock("node-gyp-build", () => ({
 			default: () => {
-				throw new Error("no local binding");
+				throw localError;
 			},
 		}));
-		const grandi = await import("../../src/index.js");
-		await expect(grandi.find()).rejects.toThrow("Unsupported platform or CPU");
+
+		const loadError = await import("../../src/index.js").then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+
+		expect(loadError).toBeInstanceOf(Error);
+		if (!(loadError instanceof Error)) throw loadError;
+		const errors = (loadError as Error & { errors: Error[] }).errors;
+		expect(errors).toHaveLength(2);
+		expect(loadError.message).toContain("Failed to load native addon");
+		expect(errors[0]).toBe(localError);
+		expect(errors[1]).toMatchObject({
+			message:
+				'Failed to find prebuilt package for linux-arm64. Please ensure that the package "@grandi/linux-arm64" is installed',
+		});
+		expect(errors[1]).toMatchObject({
+			cause: expect.objectContaining({
+				message: expect.stringContaining("@grandi/linux-arm64"),
+			}),
+		});
 	});
 });
