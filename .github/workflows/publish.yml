@@ -70,7 +70,7 @@ jobs:
             platform: win32
             arch: ia32
             pkgDir: packages/win32-ia32
-            nodeVersion: "20"
+            nodeVersion: "24"
             nodeArchitecture: x86
           - os: macos-26-intel
             platform: darwin
@@ -87,29 +87,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js x86
-        if: matrix.nodeArchitecture == 'x86'
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ matrix.nodeVersion }}
-          architecture: x86
-
       - name: Setup Node.js
-        if: matrix.nodeArchitecture != 'x86'
         uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.nodeVersion }}
-
-      - name: Upgrade npm on Windows x86
-        if: matrix.nodeArchitecture == 'x86'
-        run: npm install --global npm@11.18.0
 
       - name: Install dependencies
         if: ${{ !matrix.dockerImage }}
         run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
 
       - name: Build native addon on host
-        if: ${{ !matrix.dockerImage }}
+        if: ${{ !matrix.dockerImage && matrix.nodeArchitecture != 'x86' }}
+        run: node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+
+      - name: Build Windows x86 addon
+        if: matrix.nodeArchitecture == 'x86'
         run: node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
 
       - name: Build native addon in Docker

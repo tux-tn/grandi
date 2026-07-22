@@ -57,6 +57,7 @@
 		"platform": "win32",
 		"arch": "ia32",
 		"gypArch": "ia32",
+		"nodeTarget": "20.20.2",
 		"packageName": "@grandi/win32-ia32",
 		"packageDir": "packages/win32-ia32",
 		"sources": [

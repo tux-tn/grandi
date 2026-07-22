@@ -50,6 +50,7 @@ const TARGETS = Object.fromEntries(
 		{
 			pkgDir: target.packageDir,
 			gypArch: target.gypArch,
+			nodeTarget: target.nodeTarget,
 			sources: target.sources,
 		},
 	]),
@@ -329,25 +330,23 @@ async function buildAddon(packageDir) {
 		path.join(os.tmpdir(), "grandi-npm-cache");
 	shell.mkdir("-p", npmCacheDir);
 
-	await execa(
-		process.execPath,
-		[
-			nodeGypBin,
-			"rebuild",
-			`--arch=${buildArch}`,
-			"--enable-pgo-use=false",
-			"--",
-			`-Dproduct_dir=${productDir}`,
-		],
-		{
-			stdio: "inherit",
-			env: {
-				...process.env,
-				npm_config_cache: npmCacheDir,
-				NPM_CONFIG_CACHE: npmCacheDir,
-			},
+	const nodeGypArgs = [
+		nodeGypBin,
+		"rebuild",
+		`--arch=${buildArch}`,
+		"--enable-pgo-use=false",
+	];
+	if (meta?.nodeTarget) nodeGypArgs.push(`--target=${meta.nodeTarget}`);
+	nodeGypArgs.push("--", `-Dproduct_dir=${productDir}`);
+
+	await execa(process.execPath, nodeGypArgs, {
+		stdio: "inherit",
+		env: {
+			...process.env,
+			npm_config_cache: npmCacheDir,
+			NPM_CONFIG_CACHE: npmCacheDir,
 		},
-	);
+	});
 
 	const built = path.join("build", "Release", "grandi.node");
 	if (!(await pathExists(built))) {
