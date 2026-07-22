@@ -50,8 +50,64 @@ function findPackages() {
 	return pkgs;
 }
 
+function validateReleaseVersion(releaseTag) {
+	if (!/^v\d+\.\d+\.\d+$/.test(releaseTag)) {
+		throw new Error(`Invalid release tag: ${releaseTag}`);
+	}
+
+	const expectedVersion = releaseTag.slice(1);
+	const packagePaths = findPackages();
+	const mismatches = [];
+
+	for (const pkgPath of packagePaths) {
+		const packageJson = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+		if (packageJson.version !== expectedVersion) {
+			mismatches.push(
+				`${pkgPath} has version ${packageJson.version ?? "<missing>"}; expected ${expectedVersion}`,
+			);
+		}
+	}
+
+	const rootPackage = JSON.parse(
+		fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
+	);
+	for (const [name, version] of Object.entries(
+		rootPackage.optionalDependencies ?? {},
+	)) {
+		if (name.startsWith("@grandi/") && version !== expectedVersion) {
+			mismatches.push(
+				`root optional dependency ${name} has version ${version}; expected ${expectedVersion}`,
+			);
+		}
+	}
+
+	if (mismatches.length > 0) {
+		throw new Error(
+			`Release version validation failed:\n${mismatches
+				.map((mismatch) => `- ${mismatch}`)
+				.join("\n")}`,
+		);
+	}
+
+	console.log(
+		`[validate-version] ${packagePaths.length} package versions and root optional dependencies match ${releaseTag}`,
+	);
+}
+
 function main() {
-	const newVersion = process.argv[2];
+	const [command, argument] = process.argv.slice(2);
+	if (command === "--check") {
+		const releaseTag = argument ?? process.env.GITHUB_REF_NAME;
+		if (!releaseTag) {
+			throw new Error(
+				"Usage: node scripts/bump-version.mjs --check <release-tag>",
+			);
+		}
+		validateReleaseVersion(releaseTag);
+		return;
+	}
+
+	const newVersion = command;
 	if (!newVersion) {
 		throw new Error("Usage: node scripts/bump-version.mjs <new-version>");
 	}
