@@ -52,7 +52,7 @@ async function pumpFrames(
 			frameRateN: fps,
 			frameRateD: 1,
 			pictureAspectRatio: width / height,
-			fourCC: grandi.FOURCC_BGRA,
+			fourCC: grandi.FourCC.BGRA,
 			frameFormatType: grandi.FrameType.Progressive,
 			lineStrideBytes: width * 4,
 			data: videoBuffer,
@@ -64,7 +64,7 @@ async function pumpFrames(
 			noSamples: samplesPerFrame,
 			channelStrideBytes: samplesPerFrame * 4,
 			data: audioBuffer,
-			fourCC: grandi.FOURCC_FLTp,
+			fourCC: grandi.FourCC.FLTp,
 		});
 		await sleep(1000 / fps);
 	}
@@ -273,7 +273,7 @@ describe("grandi native addon (integration)", () => {
 			frameRateN: 30,
 			frameRateD: 1,
 			pictureAspectRatio: 1,
-			fourCC: grandi.FOURCC_BGRA,
+			fourCC: grandi.FourCC.BGRA,
 			frameFormatType: grandi.FrameType.Progressive,
 			lineStrideBytes: 8,
 			data: Buffer.alloc(16),
@@ -332,8 +332,8 @@ describe("grandi native addon (integration)", () => {
 			await sleep(200);
 			const tallyProgram = sender.tally();
 			assertTallyShape(tallyProgram);
-			expect(tallyProgram.on_program).toBe(true);
-			expect(tallyProgram.on_preview).toBe(false);
+			expect(tallyProgram.onProgram).toBe(true);
+			expect(tallyProgram.onPreview).toBe(false);
 			expect(tallyProgram.changed).toBe(true);
 			expect(sender.tally().changed).toBe(false);
 
@@ -341,8 +341,8 @@ describe("grandi native addon (integration)", () => {
 			await sleep(200);
 			const tallyPreview = sender.tally();
 			assertTallyShape(tallyPreview);
-			expect(tallyPreview.on_program).toBe(false);
-			expect(tallyPreview.on_preview).toBe(true);
+			expect(tallyPreview.onProgram).toBe(false);
+			expect(tallyPreview.onPreview).toBe(true);
 			expect(tallyPreview.changed).toBe(true);
 			expect(sender.tally().changed).toBe(false);
 
@@ -585,7 +585,7 @@ describe("grandi native addon (integration)", () => {
 				name: `${senderName}-receiver`,
 				colorFormat: grandi.ColorFormat.Fastest,
 			});
-			fs = await grandi.framesync(receiver);
+			fs = await grandi.frameSync(receiver);
 			const boundError =
 				"Receiver capture is unavailable while a FrameSync is active.";
 			await expect(receiver.video(0)).rejects.toThrow(boundError);
@@ -594,7 +594,7 @@ describe("grandi native addon (integration)", () => {
 			const metadata = await receiver.metadata(1_000);
 			expect(metadata.data).toContain("<test>framesync-metadata</test>");
 			await expect(receiver.data(0)).rejects.toThrow(boundError);
-			await expect(grandi.framesync(receiver)).rejects.toThrow(
+			await expect(grandi.frameSync(receiver)).rejects.toThrow(
 				"Receiver is already bound to a FrameSync.",
 			);
 			expect(receiver.tally({ onProgram: false, onPreview: false })).toBe(true);
@@ -680,7 +680,7 @@ describe("grandi native addon (integration)", () => {
 			const source = await waitForSourceByName(senderName);
 			routing = await grandi.routing({ name: routingName });
 			expect(routing.change(source)).toBe(true);
-			expect(routing.sourcename()).toContain(routingName);
+			expect(routing.sourceName()).toContain(routingName);
 			expect(routing.change(null)).toBe(true);
 
 			const routedSource = await waitForSourceByName(routingName);
@@ -733,7 +733,7 @@ describe("grandi native addon (integration)", () => {
 		const pumpTask = pumpFrames(sender, controller);
 
 		let receiver: Receiver | undefined;
-		let fs: Awaited<ReturnType<typeof grandi.framesync>> | undefined;
+		let fs: Awaited<ReturnType<typeof grandi.frameSync>> | undefined;
 
 		try {
 			const source = await waitForSourceByName(senderName);
@@ -743,7 +743,7 @@ describe("grandi native addon (integration)", () => {
 				colorFormat: grandi.ColorFormat.Fastest,
 			});
 
-			fs = await grandi.framesync(receiver);
+			fs = await grandi.frameSync(receiver);
 
 			const videoFrame = await waitForFrameSyncVideoFrame(
 				fs,

@@ -115,8 +115,8 @@ describe("src/index entrypoint", () => {
 		expect(grandi.version()).toBe("1.2.3");
 		expect(grandi.isSupportedCPU()).toBe(true);
 
-		const receiver = { embedded: {} };
-		await grandi.framesync(receiver as never);
+		const receiver = {};
+		await grandi.frameSync(receiver as never);
 		expect(addon.framesync).toHaveBeenLastCalledWith(receiver);
 	});
 
@@ -138,7 +138,7 @@ describe("src/index entrypoint", () => {
 		await expect(grandi.receive({} as never)).rejects.toThrow(
 			"Unsupported platform or CPU",
 		);
-		await expect(grandi.framesync({} as never)).rejects.toThrow(
+		await expect(grandi.frameSync({} as never)).rejects.toThrow(
 			"Unsupported platform or CPU",
 		);
 	});
@@ -151,19 +151,17 @@ describe("src/index entrypoint", () => {
 		const grandiModule = await import("../../src/index.js");
 
 		const grandi = grandiModule.default;
-		expect(grandi.COLOR_FORMAT_BGRX_BGRA).toBe(
+		expect(grandi.ColorFormat.BGRX_BGRA).toBe(
 			grandiModule.ColorFormat.BGRX_BGRA,
 		);
-		expect(grandi.BANDWIDTH_LOWEST).toBe(grandiModule.Bandwidth.Lowest);
-		expect(grandi.AUDIO_FORMAT_FLOAT_32_SEPARATE).toBe(
+		expect(grandi.Bandwidth.Lowest).toBe(grandiModule.Bandwidth.Lowest);
+		expect(grandi.AudioFormat.Float32Separate).toBe(
 			grandiModule.AudioFormat.Float32Separate,
 		);
-		expect(grandi.FOURCC_BGRA).toBe(grandiModule.FourCC.BGRA);
-		expect(grandi.FORMAT_TYPE_PROGRESSIVE).toBe(
+		expect(grandi.FourCC.BGRA).toBe(grandiModule.FourCC.BGRA);
+		expect(grandi.FrameType.Progressive).toBe(
 			grandiModule.FrameType.Progressive,
 		);
-		expect(grandi.TIMECODE_SYNTHESIZE).toBe(9223372036854775807n);
-		expect(grandiModule.TIMECODE_SYNTHESIZE).toBe(grandi.TIMECODE_SYNTHESIZE);
 	});
 
 	it("returns the mocked addon APIs on win32 arm", async () => {
