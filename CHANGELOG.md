@@ -1,6 +1,7 @@
 ## Unreleased
 
 ### Breaking Changes
+
 - Standardize public API names, including `frameSync()`, `extraIPs`, `sourceName`, tally fields, and audio `channels` and `samples` ([087609e](https://github.com/tux-tn/grandi/commit/087609e0b1e6f65f318e3b65e00b3c76c3bab3ed), [f3ffef1](https://github.com/tux-tn/grandi/commit/f3ffef17c36f80e296666686af70f07d7079f81b)).
 - Make `finder.wait()` asynchronous and return `Promise<boolean>` ([7659c5b](https://github.com/tux-tn/grandi/commit/7659c5b2ca75911e2ba17b13010ad35f9810c5aa)).
 - Use `bigint` for timecode and receive timestamps, and remove `PtpTimestamp` ([0e22729](https://github.com/tux-tn/grandi/commit/0e227292238ec4413f71eb81d23210fb1d167c13)).
@@ -10,7 +11,9 @@
 - Publish the root package as ESM ([932b09a](https://github.com/tux-tn/grandi/commit/932b09aabea3fbb7b380b05e8c7c84bbbbd382aa)).
 
 ### Fixed
+
 - Install project dependencies before docs build in the docs CI workflow
+
 ## [1.3.1](https://github.com/tux-tn/grandi/compare/v1.3.0...v1.3.1) (2026-07-06)
 
 - Upgrade to NDI SDK 6.3.2.0
