@@ -33,16 +33,16 @@ NDI™ was conceived as a grand vision for IP media transport. The earliest bind
 - Pull requests tackling these gaps (or other NDI 6.x+ features) are very welcome.
 
 ## Supported platforms
-Grandi publishes per-architecture packages (`@grandi/<os>-<arch>`) that bundle the native addon and the matching NDI SDK runtime. Additional platforms can be compiled from source if the NDI SDK supports them.
+Grandi publishes per-architecture packages (`@grandi/<os>-<arch>`) that bundle the native addon and the matching NDI SDK runtime. Additional platforms can be compiled from source if the NDI SDK supports them, but source compilation is an explicit maintainer/developer workflow.
 
 | Operating system | Architectures | Status | Notes |
 | --- | --- | --- | --- |
 | Windows | x86, x64 | ✅ Published as `@grandi/win32-ia32` and `@grandi/win32-x64`. Visual Studio 2013 C runtime only needed when building locally. |
 | macOS | Universal (x64 + arm64) | ✅ Published as `@grandi/darwin-x64`, `@grandi/darwin-arm64`, built against the official universal NDI™ runtime. |
-| Linux | x86, x64, armv7l, arm64 | ✅ Published as `@grandi/linux-x64`, `@grandi/linux-arm64`, `@grandi/linux-armv7l`. Built against the glibc-based NDI™ SDK; requires `libavahi-common.so.3`, `libavahi-client.so.3`, and the `avahi-daemon` service. |
+| Linux | x64, armv7l, arm64 | ✅ Published as `@grandi/linux-x64`, `@grandi/linux-arm64`, `@grandi/linux-armv7l`. Built against the glibc-based NDI™ SDK; requires `libavahi-common.so.3`, `libavahi-client.so.3`, and the `avahi-daemon` service. |
 
 ## Installation
-Install [Node.js](http://nodejs.org/) for your platform (tested against the current Long Term Support release). The main package automatically pulls the platform-specific optional dependency `@grandi/<os>-<arch>` when it exists, and falls back to building from source otherwise. Add the dependency to your project:
+Install [Node.js](http://nodejs.org/) for your platform (tested against the current Long Term Support release). The main package automatically installs the matching optional dependency `@grandi/<os>-<arch>` when a published package exists. `npm install grandi` does not download the NDI SDK or compile the native addon as a fallback. Add the dependency to your project:
 
 ```bash
 npm install grandi
@@ -52,7 +52,7 @@ pnpm add grandi
 yarn add grandi
 ```
 
-On Windows, you only need the Visual Studio 2013 C run-times when building from source (e.g., running `npm install` on an unsupported platform). You can grab them from <https://www.microsoft.com/en-us/download/details.aspx?id=40784>; consumers using the published `@grandi/win32-*` packages do **not** need to install them manually.
+Building from source requires the platform's native toolchain and NDI SDK. On Windows, source builds also require the Visual Studio 2013 C run-times; consumers using the published `@grandi/win32-*` packages do **not** need to install them manually.
 
 Grandi is designed to be `require`d or `import`ed from your own applications:
 
@@ -63,10 +63,10 @@ const grandi = require("grandi");
 ```
 
 ## Build & distribution
-Each platform package under the `@grandi/` scope bundles the native addon (`grandi.node`) and the corresponding NDI SDK runtime for that OS/arch. The root `grandi` package tries a local `node-gyp-build` resolve first and then falls back to the matching `@grandi/<os>-<arch>` optional dependency. Maintainers regenerate those packages from the official NDI SDK by running `node scripts/build-addon.mjs` (to download and stage the SDK) followed by a version bump (e.g., `node scripts/bump-version.mjs <version>`).
+Each platform package under the `@grandi/` scope bundles the native addon (`grandi.node`) and the corresponding NDI SDK runtime. At runtime, the root `grandi` package tries a locally built `node-gyp-build` addon first and then falls back to the matching `@grandi/<os>-<arch>` optional dependency; it does not invoke a source build automatically. Maintainers regenerate those packages from the official NDI SDK by running `node scripts/build-addon.mjs` (to download and stage the SDK) followed by a version bump (e.g., `node scripts/bump-version.mjs <version>`).
 
 ## Using Grandi
-This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. All calls are asynchronous and use JavaScript promises with all of the underlying work of NDI running on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs`, `examples/simple-sender.mjs`, and `examples/simple-framesync.mjs`.
+This module allows a Node.js program to find, receive, and send NDI™ video, audio, metadata, and tally streams over IP networks. Most operations are asynchronous and use JavaScript promises, while lifecycle, status, and resource-management methods return synchronously. The underlying NDI work runs on separate threads from the event loop. The following sections recap the most common workflows; for complete runnable demos, see `examples/simple-receiver.mjs`, `examples/simple-sender.mjs`, and `examples/simple-framesync.mjs`.
 
 If you want to run Grandi with [Electron](https://www.electronjs.org/), see the [Electron NDI viewer example app](https://github.com/tux-tn/electron-ndi-viewer).
 
@@ -350,11 +350,11 @@ Ready to hack on Grandi? Here’s the typical workflow.
 	- Run `node scripts/build-addon.mjs` to download and unpack the official NDI SDK into `ndi/` and populate the per-arch package folders under `packages/` with the right runtime files.
 	- Consumers don’t need this step; they install the appropriate `@grandi/<os>-<arch>` package from npm automatically.
 3. **TypeScript build**
-	- `npm run build` compiles `src/` via `tsdown`, emitting ESM/CJS bundles and declaration files in `dist/`.
+	- `npm run build` compiles `src/` via `tsdown`, emitting an ESM bundle and declaration files in `dist/`.
 4. **Native addon rebuild**
 	- If you change C/C++ files under `lib/`, recompile with `npm run build:addon`. This downloads the NDI SDK (if needed), runs `node-gyp rebuild`, and copies the resulting addon into the appropriate scoped package directory.
 5. **Testing**
-	- `npm test` runs the full Vitest suite (unit + integration stubs).
+	- `npm test` runs the full Vitest suite, including native integration tests against a real NDI environment.
 	- `npm run test:unit` focuses on pure JS/TS tests.
 	- `npm run test:integration` exercises the native bindings against a real NDI environment;
 	- `npm run test:coverage` provides coverage data via `@vitest/coverage-v8`.
@@ -375,6 +375,7 @@ This section documents every exported method and type surfaced by the module. Re
 | --- | --- | --- |
 | `find(options?: FindOptions)` | `Promise<Finder>` | Discover available NDI sources, optionally filtering by groups, local visibility, or explicit IPs. Resolves to a finder whose `sources()` method exposes the latest snapshot. |
 | `receive(options: ReceiveOptions)` | `Promise<Receiver>` | Create a receiver bound to a specific `Source` with optional color format, bandwidth, interlaced, and naming tweaks. |
+| `framesync(receiver: Receiver)` | `Promise<FrameSync>` | Create an NDI frame-synchronizer backed by an existing receiver for pull-based video and audio playback. |
 | `send(options: SendOptions)` | `Promise<Sender>` | Create a sender that can push video, audio, metadata, and tally updates into the NDI network. |
 | `routing(params: { name?: string; groups?: string })` | `Promise<Routing>` | Build an NDI router that can switch downstream destinations to new sources via `routing.change`. |
 | `initialize()` / `destroy()` | `boolean` | Optionally start or stop the process-global NDI library. Constructors do not call `initialize()` automatically. |
