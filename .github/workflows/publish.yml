@@ -26,6 +26,11 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "24"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
+
+      - name: Validate platform matrix
+        run: npm run validate:platforms
 
       - name: Validate package versions
         run: node scripts/bump-version.mjs --check "$GITHUB_REF_NAME"
@@ -131,7 +136,6 @@ jobs:
           path: artifact
           if-no-files-found: error
           retention-days: 7
-
 
   publish:
     name: Publish npm packages

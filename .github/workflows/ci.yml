@@ -29,14 +29,11 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y avahi-daemon libavahi-common3 libavahi-client3
-
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
 
+      - name: Validate platform matrix
+        run: npm run validate:platforms
       - name: Type check TypeScript sources
         run: npm exec -- tsc --noEmit -p tsconfig.json
 
