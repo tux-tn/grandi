@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - "**"
+      - main
   pull_request:
     branches:
       - main
@@ -81,8 +81,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y avahi-daemon libavahi-common3 libavahi-client3
-          sudo dbus-daemon --system --fork 2>/dev/null || true
-          sudo avahi-daemon --daemonize --no-chroot 2>/dev/null || true
+          sudo service dbus start
+          sudo service avahi-daemon restart
+          sudo avahi-daemon --check
 
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
