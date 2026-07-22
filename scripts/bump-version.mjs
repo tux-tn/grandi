@@ -3,22 +3,37 @@ import path from "node:path";
 
 const ROOT = process.cwd();
 
-function updatePackageJson(pkgPath, version) {
-	const json = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-	const before = json.version;
+function replaceStringField(content, key, value, filePath) {
+	const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const pattern = new RegExp(
+		`(^[\\t ]*"${escapedKey}"[\\t ]*:[\\t ]*)"([^"\\r\\n]*)"`,
+		"m",
+	);
+	const match = content.match(pattern);
+	if (!match) throw new Error(`Missing "${key}" field in ${filePath}`);
+	return {
+		content: content.replace(pattern, (_, prefix) => {
+			return `${prefix}${JSON.stringify(value)}`;
+		}),
+		before: match[2],
+	};
+}
 
-	if (json.optionalDependencies) {
-		for (const dep of Object.keys(json.optionalDependencies)) {
-			if (dep.startsWith("@grandi/")) {
-				json.optionalDependencies[dep] = version;
-			}
-		}
-	} else {
-		json.version = version;
+function updatePackageJson(pkgPath, version) {
+	const source = fs.readFileSync(pkgPath, "utf8");
+	const json = JSON.parse(source);
+	const versionUpdate = replaceStringField(source, "version", version, pkgPath);
+	let content = versionUpdate.content;
+
+	for (const dep of Object.keys(json.optionalDependencies ?? {})) {
+		if (!dep.startsWith("@grandi/")) continue;
+		content = replaceStringField(content, dep, version, pkgPath).content;
 	}
 
-	fs.writeFileSync(pkgPath, `${JSON.stringify(json, null, 2)}\n`);
-	console.log(`[set-version] ${pkgPath}: ${before} -> ${version}`);
+	fs.writeFileSync(pkgPath, content);
+	console.log(
+		`[set-version] ${pkgPath}: ${versionUpdate.before} -> ${version}`,
+	);
 }
 
 function findPackages() {
