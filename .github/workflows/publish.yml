@@ -28,34 +28,7 @@ jobs:
           node-version: "24"
 
       - name: Validate package versions
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-          import path from "node:path";
-
-          const tag = process.env.GITHUB_REF_NAME;
-          if (!/^v\d+\.\d+\.\d+$/.test(tag)) {
-            throw new Error(`Invalid release tag: ${tag}`);
-          }
-
-          const version = tag.slice(1);
-          const packagePaths = [
-            "package.json",
-            ...fs
-              .readdirSync("packages", { withFileTypes: true })
-              .filter((entry) => entry.isDirectory())
-              .map((entry) => path.join("packages", entry.name, "package.json")),
-          ];
-
-          for (const packagePath of packagePaths) {
-            const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
-            if (packageJson.version !== version) {
-              throw new Error(
-                `${packagePath} has version ${packageJson.version}; expected ${version}`,
-              );
-            }
-          }
-          NODE
+        run: node scripts/bump-version.mjs --check "$GITHUB_REF_NAME"
 
   build-addon:
     name: Build ${{ matrix.platform }}-${{ matrix.arch }}

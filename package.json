@@ -46,14 +46,11 @@
 		"node-gyp-build": "^4.8.4"
 	},
 	"devDependencies": {
-		"@types/bindings": "^1.5.5",
 		"@types/cross-zip": "^4.0.2",
 		"@types/node": "^26.1.1",
 		"@types/shelljs": "^0.10.0",
 		"@types/tmp": "^0.2.6",
 		"@vitest/coverage-v8": "^4.1.10",
-		"cross-env": "^10.1.0",
-		"cross-spawn": "7.0.6",
 		"cross-zip": "4.0.1",
 		"execa": "9.6.1",
 		"got": "15.1.0",
@@ -63,7 +60,6 @@
 		"oxlint-tsgolint": "^0.24.0",
 		"shelljs": "0.10.0",
 		"shx": "0.4.0",
-		"standard-version": "^9.5.0",
 		"tmp": "0.2.7",
 		"tsdown": "^0.22.4",
 		"typescript": "^7.0.2",
