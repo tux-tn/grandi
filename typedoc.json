@@ -1,0 +1,12 @@
+{
+	"entryPoints": ["src/index.ts"],
+	"tsconfig": "tsconfig.json",
+	"out": "docs/api",
+	"plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+	"docsRoot": "docs",
+	"excludeInternal": true,
+	"readme": "none",
+	"cleanOutputDir": true,
+	"hideGenerator": true,
+	"githubPages": false
+}
