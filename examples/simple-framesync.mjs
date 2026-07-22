@@ -48,7 +48,7 @@ async function main() {
 			name: "grandi-example-framesync-receiver",
 			colorFormat: grandi.ColorFormat.Fastest,
 		});
-		frameSync = await grandi.framesync(receiver);
+		frameSync = await grandi.frameSync(receiver);
 
 		console.log(`Pulling video and audio at ${FPS} FPS. Press Ctrl+C to stop.`);
 		const frameIntervalMs = 1000 / FPS;

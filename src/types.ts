@@ -157,11 +157,9 @@ export interface ReceiverPerformance {
 export interface ReceiverQueue {
 	videoFrames: number;
 	audioFrames: number;
-	metadataFrames: number;
 }
 
 export interface Receiver {
-	embedded: unknown;
 	source: Source;
 	colorFormat: ColorFormat;
 	bandwidth: Bandwidth;
@@ -193,12 +191,15 @@ export interface ReceiverTallyState {
 
 export interface SenderTally {
 	changed: boolean;
+	onProgram: boolean;
+	onPreview: boolean;
+	/** @deprecated Use `onProgram` instead. */
 	on_program: boolean;
+	/** @deprecated Use `onPreview` instead. */
 	on_preview: boolean;
 }
 
 export interface Sender {
-	embedded: unknown;
 	name: string;
 	groups?: string;
 	clockVideo: boolean;
@@ -208,18 +209,21 @@ export interface Sender {
 	connections(): number;
 	metadata(data: string): boolean;
 	tally(): SenderTally;
+	sourceName(): string;
+	/** @deprecated Use `sourceName` instead. */
 	sourcename(): string;
 	destroy(): boolean;
 }
 
 export interface Routing {
-	embedded: unknown;
 	name?: string;
 	groups?: string;
 	destroy(): boolean;
 	change(source: Source | null | undefined): boolean;
 	clear(): boolean;
 	connections(): number;
+	sourceName(): string;
+	/** @deprecated Use `sourceName` instead. */
 	sourcename(): string;
 }
 
@@ -248,7 +252,6 @@ export interface FrameSyncAudioFormat {
 }
 
 export interface FrameSync {
-	embedded: unknown;
 	/**
 	 * Captures a video frame using NDI frame-synchronization (time base correction).
 	 * Always returns immediately.
@@ -259,9 +262,7 @@ export interface FrameSync {
 	/**
 	 * Captures audio using NDI frame-synchronization (resampled to match your calls).
 	 * Always returns immediately and may insert silence if no audio is present.
-	 * `samples` must be greater than zero. Omit `sampleRate` or `channels`
-	 * to use the current incoming format. `noSamples` and `noChannels` remain
-	 * supported as deprecated aliases.
+	 * `samples` must be greater than zero.
 	 */
 	audio(options: FrameSyncAudioOptions): Promise<ReceivedAudioFrame>;
 	/**
@@ -285,6 +286,8 @@ export interface Finder {
 export interface FindOptions {
 	showLocalSources?: boolean;
 	groups?: string;
+	extraIps?: string;
+	/** @deprecated Use `extraIps` instead. */
 	extraIPs?: string;
 }
 
@@ -396,7 +399,7 @@ export interface Grandi {
 	 * Destroy the frame-sync before the receiver. Direct capture becomes available
 	 * again after the frame-sync is destroyed.
 	 */
-	framesync(receiver: Receiver): Promise<FrameSync>;
+	frameSync(receiver: Receiver): Promise<FrameSync>;
 	/**
 	 * Creates an NDI router for switching between different NDI sources.
 	 * @param params Router options.
@@ -455,130 +458,4 @@ export interface Grandi {
 	 * NDI sentinel that asks the SDK to synthesize the timecode.
 	 */
 	TIMECODE_SYNTHESIZE: bigint;
-
-	// Constant aliases for backwards compatibility / convenience.
-	/**
-	 * Alias of `ColorFormat.BGRX_BGRA`.
-	 */
-	COLOR_FORMAT_BGRX_BGRA: ColorFormat;
-	/**
-	 * Alias of `ColorFormat.UYVY_BGRA`.
-	 */
-	COLOR_FORMAT_UYVY_BGRA: ColorFormat;
-	/**
-	 * Alias of `ColorFormat.RGBX_RGBA`.
-	 */
-	COLOR_FORMAT_RGBX_RGBA: ColorFormat;
-	/**
-	 * Alias of `ColorFormat.UYVY_RGBA`.
-	 */
-	COLOR_FORMAT_UYVY_RGBA: ColorFormat;
-	/**
-	 * Alias of `ColorFormat.Fastest`.
-	 */
-	COLOR_FORMAT_FASTEST: ColorFormat;
-	/**
-	 * Alias of `ColorFormat.Best`.
-	 */
-	COLOR_FORMAT_BEST: ColorFormat;
-	/**
-	 * Alias of `ColorFormat.BGRX_BGRA_FLIPPED` (Windows-only).
-	 */
-	COLOR_FORMAT_BGRX_BGRA_FLIPPED: ColorFormat;
-
-	/**
-	 * Alias of `Bandwidth.MetadataOnly`.
-	 */
-	BANDWIDTH_METADATA_ONLY: Bandwidth;
-	/**
-	 * Alias of `Bandwidth.AudioOnly`.
-	 */
-	BANDWIDTH_AUDIO_ONLY: Bandwidth;
-	/**
-	 * Alias of `Bandwidth.Lowest`.
-	 */
-	BANDWIDTH_LOWEST: Bandwidth;
-	/**
-	 * Alias of `Bandwidth.Highest`.
-	 */
-	BANDWIDTH_HIGHEST: Bandwidth;
-
-	/**
-	 * Alias of `FrameType.Progressive`.
-	 */
-	FORMAT_TYPE_PROGRESSIVE: FrameType;
-	/**
-	 * Alias of `FrameType.Interlaced`.
-	 */
-	FORMAT_TYPE_INTERLACED: FrameType;
-	/**
-	 * Alias of `FrameType.Field0`.
-	 */
-	FORMAT_TYPE_FIELD_0: FrameType;
-	/**
-	 * Alias of `FrameType.Field1`.
-	 */
-	FORMAT_TYPE_FIELD_1: FrameType;
-
-	/**
-	 * Alias of `AudioFormat.Float32Separate`.
-	 */
-	AUDIO_FORMAT_FLOAT_32_SEPARATE: AudioFormat;
-	/**
-	 * Alias of `AudioFormat.Float32Interleaved`.
-	 */
-	AUDIO_FORMAT_FLOAT_32_INTERLEAVED: AudioFormat;
-	/**
-	 * Alias of `AudioFormat.Int16Interleaved`.
-	 */
-	AUDIO_FORMAT_INT_16_INTERLEAVED: AudioFormat;
-
-	/**
-	 * Alias of `FourCC.UYVY`.
-	 */
-	FOURCC_UYVY: VideoFourCC;
-	/**
-	 * Alias of `FourCC.UYVA`.
-	 */
-	FOURCC_UYVA: VideoFourCC;
-	/**
-	 * Alias of `FourCC.P216`.
-	 */
-	FOURCC_P216: VideoFourCC;
-	/**
-	 * Alias of `FourCC.PA16`.
-	 */
-	FOURCC_PA16: VideoFourCC;
-	/**
-	 * Alias of `FourCC.YV12`.
-	 */
-	FOURCC_YV12: VideoFourCC;
-	/**
-	 * Alias of `FourCC.I420`.
-	 */
-	FOURCC_I420: VideoFourCC;
-	/**
-	 * Alias of `FourCC.NV12`.
-	 */
-	FOURCC_NV12: VideoFourCC;
-	/**
-	 * Alias of `FourCC.BGRA`.
-	 */
-	FOURCC_BGRA: VideoFourCC;
-	/**
-	 * Alias of `FourCC.BGRX`.
-	 */
-	FOURCC_BGRX: VideoFourCC;
-	/**
-	 * Alias of `FourCC.RGBA`.
-	 */
-	FOURCC_RGBA: VideoFourCC;
-	/**
-	 * Alias of `FourCC.RGBX`.
-	 */
-	FOURCC_RGBX: VideoFourCC;
-	/**
-	 * Alias of `FourCC.FLTp`.
-	 */
-	FOURCC_FLTp: AudioFourCC;
 }
