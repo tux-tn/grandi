@@ -73,31 +73,6 @@
           }
         ],
         [
-          "OS == 'linux' and target_arch == 'ia32'",
-          {
-            "copies": [
-              {
-                "destination": "<(product_dir)",
-                "files": [
-                  "<(ndi_dir)/lib/lnx-x86/libndi.so.6",
-                  "<(ndi_dir)/lib/LICENSE",
-                ]
-              }
-            ],
-            "link_settings": {
-              "ldflags": [
-                "-Wl,-rpath,'$$ORIGIN'"
-              ],
-              "libraries": [
-                "-lndi"
-              ],
-              "library_dirs": [
-                "<(ndi_dir)/lib/lnx-x86"
-              ]
-            }
-          }
-        ],
-        [
           "OS == 'linux' and target_arch == 'x64'",
           {
             "copies": [
