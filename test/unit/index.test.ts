@@ -164,6 +164,88 @@ describe("src/index entrypoint", () => {
 		);
 	});
 
+	it("exposes deprecated enum aliases on the default export", async () => {
+		const addon = createAddonMock();
+		restorePlatform = mockProcessProperty("platform", "linux");
+		restoreArch = mockProcessProperty("arch", "x64");
+		vi.doMock("node-gyp-build", () => ({ default: () => addon }));
+		const grandiModule = await import("../../src/index.js");
+
+		const grandi = grandiModule.default;
+		expect(grandi.COLOR_FORMAT_BGRX_BGRA).toBe(
+			grandiModule.ColorFormat.BGRX_BGRA,
+		);
+		expect(grandi.COLOR_FORMAT_UYVY_BGRA).toBe(
+			grandiModule.ColorFormat.UYVY_BGRA,
+		);
+		expect(grandi.COLOR_FORMAT_RGBX_RGBA).toBe(
+			grandiModule.ColorFormat.RGBX_RGBA,
+		);
+		expect(grandi.COLOR_FORMAT_UYVY_RGBA).toBe(
+			grandiModule.ColorFormat.UYVY_RGBA,
+		);
+		expect(grandi.COLOR_FORMAT_FASTEST).toBe(grandiModule.ColorFormat.Fastest);
+		expect(grandi.COLOR_FORMAT_BEST).toBe(grandiModule.ColorFormat.Best);
+		expect(grandi.COLOR_FORMAT_BGRX_BGRA_FLIPPED).toBe(
+			grandiModule.ColorFormat.BGRX_BGRA_FLIPPED,
+		);
+		expect(grandi.BANDWIDTH_METADATA_ONLY).toBe(
+			grandiModule.Bandwidth.MetadataOnly,
+		);
+		expect(grandi.BANDWIDTH_AUDIO_ONLY).toBe(grandiModule.Bandwidth.AudioOnly);
+		expect(grandi.BANDWIDTH_LOWEST).toBe(grandiModule.Bandwidth.Lowest);
+		expect(grandi.BANDWIDTH_HIGHEST).toBe(grandiModule.Bandwidth.Highest);
+		expect(grandi.AUDIO_FORMAT_FLOAT_32_SEPARATE).toBe(
+			grandiModule.AudioFormat.Float32Separate,
+		);
+		expect(grandi.AUDIO_FORMAT_FLOAT_32_INTERLEAVED).toBe(
+			grandiModule.AudioFormat.Float32Interleaved,
+		);
+		expect(grandi.AUDIO_FORMAT_INT_16_INTERLEAVED).toBe(
+			grandiModule.AudioFormat.Int16Interleaved,
+		);
+	});
+
+	it("exposes deprecated frame format aliases on the default export", async () => {
+		const addon = createAddonMock();
+		restorePlatform = mockProcessProperty("platform", "linux");
+		restoreArch = mockProcessProperty("arch", "x64");
+		vi.doMock("node-gyp-build", () => ({ default: () => addon }));
+		const grandiModule = await import("../../src/index.js");
+
+		const grandi = grandiModule.default;
+		expect(grandi.FORMAT_TYPE_PROGRESSIVE).toBe(
+			grandiModule.FrameType.Progressive,
+		);
+		expect(grandi.FORMAT_TYPE_INTERLACED).toBe(
+			grandiModule.FrameType.Interlaced,
+		);
+		expect(grandi.FORMAT_TYPE_FIELD_0).toBe(grandiModule.FrameType.Field0);
+		expect(grandi.FORMAT_TYPE_FIELD_1).toBe(grandiModule.FrameType.Field1);
+	});
+
+	it("exposes deprecated FourCC aliases on the default export", async () => {
+		const addon = createAddonMock();
+		restorePlatform = mockProcessProperty("platform", "linux");
+		restoreArch = mockProcessProperty("arch", "x64");
+		vi.doMock("node-gyp-build", () => ({ default: () => addon }));
+		const grandiModule = await import("../../src/index.js");
+
+		const grandi = grandiModule.default;
+		expect(grandi.FOURCC_UYVY).toBe(grandiModule.FourCC.UYVY);
+		expect(grandi.FOURCC_UYVA).toBe(grandiModule.FourCC.UYVA);
+		expect(grandi.FOURCC_P216).toBe(grandiModule.FourCC.P216);
+		expect(grandi.FOURCC_PA16).toBe(grandiModule.FourCC.PA16);
+		expect(grandi.FOURCC_YV12).toBe(grandiModule.FourCC.YV12);
+		expect(grandi.FOURCC_I420).toBe(grandiModule.FourCC.I420);
+		expect(grandi.FOURCC_NV12).toBe(grandiModule.FourCC.NV12);
+		expect(grandi.FOURCC_BGRA).toBe(grandiModule.FourCC.BGRA);
+		expect(grandi.FOURCC_BGRX).toBe(grandiModule.FourCC.BGRX);
+		expect(grandi.FOURCC_RGBA).toBe(grandiModule.FourCC.RGBA);
+		expect(grandi.FOURCC_RGBX).toBe(grandiModule.FourCC.RGBX);
+		expect(grandi.FOURCC_FLTp).toBe(grandiModule.FourCC.FLTp);
+	});
+
 	it("returns the mocked addon APIs on win32 arm", async () => {
 		const addon = createAddonMock();
 		restorePlatform = mockProcessProperty("platform", "win32");
