@@ -34,6 +34,9 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Install project dependencies
+        run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
+
       - name: Install documentation dependencies
         run: npm install --prefix docs --ignore-scripts --no-audit --no-fund
 

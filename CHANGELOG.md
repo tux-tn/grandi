@@ -1,7 +1,6 @@
 ## Unreleased
 
 ### Breaking Changes
-
 - Standardize public API names, including `frameSync()`, `extraIPs`, `sourceName`, tally fields, and audio `channels` and `samples` ([087609e](https://github.com/tux-tn/grandi/commit/087609e0b1e6f65f318e3b65e00b3c76c3bab3ed), [f3ffef1](https://github.com/tux-tn/grandi/commit/f3ffef17c36f80e296666686af70f07d7079f81b)).
 - Make `finder.wait()` asynchronous and return `Promise<boolean>` ([7659c5b](https://github.com/tux-tn/grandi/commit/7659c5b2ca75911e2ba17b13010ad35f9810c5aa)).
 - Use `bigint` for timecode and receive timestamps, and remove `PtpTimestamp` ([0e22729](https://github.com/tux-tn/grandi/commit/0e227292238ec4413f71eb81d23210fb1d167c13)).
@@ -10,47 +9,8 @@
 - Split video and audio FourCC types ([0b17da9](https://github.com/tux-tn/grandi/commit/0b17da94cb379cbf10feff04f48ca19efa450ae4)).
 - Publish the root package as ESM ([932b09a](https://github.com/tux-tn/grandi/commit/932b09aabea3fbb7b380b05e8c7c84bbbbd382aa)).
 
-### Features
-
-- Add receiver performance, queue, connection, and status observability ([4c152a6](https://github.com/tux-tn/grandi/commit/4c152a6cdb9932d68b5d695683037fbc7a1820e2)).
-- Add typed enums for color formats, bandwidth, audio formats, frame formats, and FourCC values ([087609e](https://github.com/tux-tn/grandi/commit/087609e0b1e6f65f318e3b65e00b3c76c3bab3ed)).
-- Keep deprecated compatibility aliases on the default export and accepted input objects ([2c5073b](https://github.com/tux-tn/grandi/commit/2c5073b280fc4c00fc918bc196657c169ac3a0e0)).
-- Copy the applicable NDI runtime libraries beside locally built native addons ([55dd666](https://github.com/tux-tn/grandi/commit/55dd666cebec4c9112f765caf8b46f53ee565c35)).
-
-### Bug Fixes
-
-- Preserve all native-addon loading errors and their nested causes ([07de657](https://github.com/tux-tn/grandi/commit/07de65735f2a8fa7f31569cfd929eae383f4a14d)).
-- Reject unsupported Linux architectures before optional-package loading ([559b4ce](https://github.com/tux-tn/grandi/commit/559b4ce4a33bf616b157227291dcaad07bd14acc)).
-- Replace deprecated `sprintf` calls with bounded `snprintf` calls ([ae3863b](https://github.com/tux-tn/grandi/commit/ae3863bd34a7649937fa407788355e0b2641f280)).
-- Harden finder, receiver, sender, FrameSync, and routing lifecycles ([e9b6180](https://github.com/tux-tn/grandi/commit/e9b6180839524c6454d78d082d88b7fe2c76f5d8), [f90ac4f](https://github.com/tux-tn/grandi/commit/f90ac4fb23350b7e30c52c9ae9126d04898f9f4b)).
-- Preserve unrelated frames during targeted receiver capture ([d3bd6da](https://github.com/tux-tn/grandi/commit/d3bd6da9dd8a37bc72eec046416ff874109d364c)).
-- Validate receiver and finder timeouts and sender frame layouts ([dc77fa5](https://github.com/tux-tn/grandi/commit/dc77fa532e29432fe15236ad4c5f5f4bc30b8f3e), [e9b6180](https://github.com/tux-tn/grandi/commit/e9b6180839524c6454d78d082d88b7fe2c76f5d8)).
-- Remove the receive-only timestamp from outbound video frames ([66bab1a](https://github.com/tux-tn/grandi/commit/66bab1aa9d83aa7be6d0897f22eadbb0ea818a88)).
-- Correct benchmark latency calculations by using NDI timestamps ([2054da3](https://github.com/tux-tn/grandi/commit/2054da360a96569296f8e8d80c8ea15679b5caa8), [a4317af](https://github.com/tux-tn/grandi/commit/a4317af3f5e3d300b1930e17fcd7d75548ca5a9b)).
-- Fix ESM imports and Node.js types in integration tests ([023fba0](https://github.com/tux-tn/grandi/commit/023fba0ca7ae90ffe1900d12e888a3165c2810af)).
-
-### Performance Improvements
-
-- Move received-frame copies away from completion callbacks ([0081a56](https://github.com/tux-tn/grandi/commit/0081a56cc86f7920573f6b53a7bfcb3ceb1f09a9)).
-- Remove unnecessary asynchronous scheduling from FrameSync ([0081a56](https://github.com/tux-tn/grandi/commit/0081a56cc86f7920573f6b53a7bfcb3ceb1f09a9)).
-- Reduce benchmark overhead in throughput mode ([9eafee0](https://github.com/tux-tn/grandi/commit/9eafee04605491fc631493c15e005a21a0979fc0)).
-
-### Documentation
-
-- Add the documentation site, generated API reference, release notes, and version 2 migration guide ([f522b73](https://github.com/tux-tn/grandi/commit/f522b73b926d1d24e6d6bbe2204dba55b99f0e00)).
-- Add guides for installation, lifecycle, discovery, sending, receiving, FrameSync, routing, timing, platforms, troubleshooting, Electron, and bundlers.
-- Document Arch Linux Avahi installation and native-package requirements.
-- Add NDI SDK guidance, examples, and links for synthesized timecode and other SDK behavior.
-- Add a repository-hosted Grandi mark and simplify the documentation theme.
-
-### Build and Tooling
-
-- Centralize supported platform targets and validate package and release metadata ([745e53d](https://github.com/tux-tn/grandi/commit/745e53d595daeefbde2b81b93d5a03b130ab4bb9), [a5bdb6d](https://github.com/tux-tn/grandi/commit/a5bdb6defe974554a7a8e0059c44611fcbdf1489)).
-- Consolidate native-addon publishing into the release workflow ([570a8be](https://github.com/tux-tn/grandi/commit/570a8be687c648fb7b918706ceb76a0a3cf2dd9a)).
-- Validate documentation formatting in CI ([ccb491d](https://github.com/tux-tn/grandi/commit/ccb491de541cc32ce02a1cd23f67c2bfd5a5ba45)).
-- Replace Biome with Oxlint and Oxfmt ([8e69091](https://github.com/tux-tn/grandi/commit/8e69091727bd889d720a832c3fdeff3a195e83f1)).
-- Remove unsupported Linux ia32 build paths and unused dependencies ([559b4ce](https://github.com/tux-tn/grandi/commit/559b4ce4a33bf616b157227291dcaad07bd14acc), [a5bdb6d](https://github.com/tux-tn/grandi/commit/a5bdb6defe974554a7a8e0059c44611fcbdf1489)).
-
+### Fixed
+- Install project dependencies before docs build in the docs CI workflow
 ## [1.3.1](https://github.com/tux-tn/grandi/compare/v1.3.0...v1.3.1) (2026-07-06)
 
 - Upgrade to NDI SDK 6.3.2.0
