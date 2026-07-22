@@ -274,7 +274,6 @@ async function ndiSubsetPresent() {
 			path.join("ndi", "lib", "win-x86"),
 			path.join("ndi", "lib", "win-x64"),
 			path.join("ndi", "lib", "macOS"),
-			path.join("ndi", "lib", "lnx-x86"),
 			path.join("ndi", "lib", "lnx-x64"),
 			path.join("ndi", "lib", "lnx-armv7l"),
 			path.join("ndi", "lib", "lnx-arm64"),
@@ -416,7 +415,7 @@ async function main() {
 
 	const supportedPlatform =
 		platform === "darwin" ||
-		platform === "linux" ||
+		(platform === "linux" && ["x64", "arm64", "arm"].includes(arch)) ||
 		(platform === "win32" && ["ia32", "x64"].includes(arch));
 
 	if (!supportedPlatform) {
@@ -563,7 +562,6 @@ async function main() {
 			shell.rm("-rf", "ndi");
 			shell.mkdir("-p", [
 				"ndi/include",
-				"ndi/lib/lnx-x86",
 				"ndi/lib/lnx-x64",
 				"ndi/lib/lnx-armv7l",
 				"ndi/lib/lnx-arm64",
@@ -571,10 +569,6 @@ async function main() {
 			shell.mv(
 				path.join(workDir, "NDI SDK for Linux/include/*.h"),
 				"ndi/include/",
-			);
-			shell.mv(
-				path.join(workDir, "NDI SDK for Linux/lib/i686-linux-gnu/*"),
-				"ndi/lib/lnx-x86/",
 			);
 			shell.mv(
 				path.join(workDir, "NDI SDK for Linux/lib/x86_64-linux-gnu/*"),

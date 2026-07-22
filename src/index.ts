@@ -23,12 +23,13 @@ import {
 
 /**
  * Checks if the current platform and architecture are supported by NDI.
- * @returns {boolean} True if the platform is supported (darwin, linux, or win32 with ia32/x64), false otherwise.
+ * @returns {boolean} True if the platform and architecture are supported, false otherwise.
  */
 function isSupportedPlatform(): boolean {
 	return (
 		process.platform === "darwin" ||
-		process.platform === "linux" ||
+		(process.platform === "linux" &&
+			["x64", "arm64", "arm"].includes(process.arch)) ||
 		(process.platform === "win32" && ["ia32", "x64"].includes(process.arch))
 	);
 }
