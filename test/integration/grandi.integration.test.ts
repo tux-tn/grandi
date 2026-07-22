@@ -70,6 +70,18 @@ async function pumpFrames(
 	}
 }
 
+async function waitForSenderConnection(
+	sender: Sender,
+	timeoutMs = 5_000,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (sender.connections() > 0) return;
+		await sleep(50);
+	}
+	throw new Error("Timed out waiting for sender connection");
+}
+
 function assertReceivedVideoFrame(frame: ReceivedVideoFrame) {
 	expect(frame.type).toBe("video");
 	expect(typeof frame.xres).toBe("number");
@@ -611,6 +623,7 @@ describe("grandi native addon (integration)", () => {
 				"Receiver capture is unavailable while a FrameSync is active.";
 			await expect(receiver.video(0)).rejects.toThrow(boundError);
 			await expect(receiver.audio(0)).rejects.toThrow(boundError);
+			await waitForSenderConnection(sender);
 			expect(sender.metadata("<test>framesync-metadata</test>")).toBe(true);
 			const metadata = await receiver.metadata(1_000);
 			expect(metadata.data).toContain("<test>framesync-metadata</test>");
