@@ -26,7 +26,7 @@ export default defineConfig({
 		["link", { rel: "icon", href: `${base}mark.svg`, type: "image/svg+xml" }],
 		["meta", { name: "theme-color", content: "#080d12" }],
 		["meta", { property: "og:type", content: "website" }],
-		["meta", { property: "og:title", content: "Grandi — NDI for Node.js" }],
+		["meta", { property: "og:title", content: "Grandi" }],
 		[
 			"meta",
 			{

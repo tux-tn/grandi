@@ -1,4 +1,4 @@
-## Unreleased
+## [2.0.0](https://github.com/tux-tn/grandi/compare/v1.3.1...v2.0.0)
 
 ### Breaking Changes
 
