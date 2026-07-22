@@ -1,5 +1,6 @@
 import path from "node:path";
 import nodeGypBuild from "node-gyp-build";
+import platformTargets from "./platforms.json" with { type: "json" };
 
 import type {
 	Finder,
@@ -21,32 +22,27 @@ import {
 	TIMECODE_SYNTHESIZE,
 } from "./types.js";
 
+function currentPlatformTarget() {
+	return platformTargets.find(
+		(target) =>
+			target.platform === process.platform && target.arch === process.arch,
+	);
+}
+
 /**
  * Checks if the current platform and architecture are supported by NDI.
  * @returns {boolean} True if the platform and architecture are supported, false otherwise.
  */
 function isSupportedPlatform(): boolean {
-	return (
-		process.platform === "darwin" ||
-		(process.platform === "linux" &&
-			["x64", "arm64", "arm"].includes(process.arch)) ||
-		(process.platform === "win32" && ["ia32", "x64"].includes(process.arch))
-	);
+	return currentPlatformTarget() !== undefined;
 }
 
 function tryRequireArchPackage(): GrandiAddon | null {
 	const archKey = `${process.platform}-${process.arch}`;
-	const map: Record<string, string> = {
-		"linux-x64": "@grandi/linux-x64",
-		"linux-arm64": "@grandi/linux-arm64",
-		"linux-arm": "@grandi/linux-armv7l",
-		"win32-x64": "@grandi/win32-x64",
-		"win32-ia32": "@grandi/win32-ia32",
-		"darwin-x64": "@grandi/darwin-x64",
-		"darwin-arm64": "@grandi/darwin-arm64",
-	};
-	const pkg = map[archKey];
-	if (!pkg) throw new Error(`Unsupported platform or architecture: ${archKey}`);
+	const target = currentPlatformTarget();
+	if (!target)
+		throw new Error(`Unsupported platform or architecture: ${archKey}`);
+	const pkg = target.packageName;
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		return require(pkg) as GrandiAddon;
@@ -231,7 +227,33 @@ export const destroy = addon.destroy;
  * sender.destroy();
  * ```
  */
-export const send = addon.send;
+export async function send(params: SendOptions): Promise<Sender> {
+	const native = await addon.send(params);
+	Object.defineProperty(native, "sourceName", {
+		configurable: true,
+		value: native.sourcename,
+	});
+	const origTally = native.tally;
+	native.tally = () => {
+		const result = origTally.call(native);
+		Object.defineProperties(result, {
+			onProgram: {
+				configurable: true,
+				get() {
+					return this.on_program;
+				},
+			},
+			onPreview: {
+				configurable: true,
+				get() {
+					return this.on_preview;
+				},
+			},
+		});
+		return result;
+	};
+	return native;
+}
 /**
  * Creates an NDI receiver for receiving video and audio from an NDI source.
  * @param {ReceiveOptions} params - Options for creating the receiver.
@@ -257,45 +279,20 @@ export const send = addon.send;
  * ```
  */
 export const receive = addon.receive;
-/**
- * Creates an NDI frame-synchronizer (time base corrector) backed by an existing receiver.
- * Use this when you want smooth playback clocked to your own render/audio loop.
- *
- * Note: destroy the frame-sync before destroying the receiver.
- * @param {Receiver} receiver - The receiver instance to frame-sync.
- * @returns {Promise<FrameSync>} A promise that resolves to a FrameSync instance.
- * @throws {Error} Promise rejects on unsupported platform/CPU or if framesync creation fails.
- *
- * @example
- * ```js
- * import grandi from "grandi";
- * grandi.initialize();
- * const receiver = await grandi.receive({ source });
- * const fs = await grandi.framesync(receiver);
- * const frame = await fs.video(grandi.FrameType.Progressive);
- * fs.destroy();
- * receiver.destroy();
- * ```
- */
+export const frameSync = addon.framesync;
+/** @deprecated Use `frameSync` instead. */
 export const framesync = addon.framesync;
-/**
- * Creates an NDI router for switching between different NDI sources.
- * @param {Object} params - Options for creating the router.
- * @param {string} [params.name] - The name for the router.
- * @param {string} [params.groups] - Multicast groups for the router.
- * @returns {Promise<Routing>} A promise that resolves to a Routing instance for source switching.
- * @throws {Error} Promise rejects on unsupported platform/CPU or if routing creation fails.
- *
- * @example
- * ```js
- * import { initialize, routing } from "grandi";
- * initialize();
- * const router = await routing({ name: "My Router" });
- * // router.change(source)
- * router.destroy();
- * ```
- */
-export const routing = addon.routing;
+export async function routing(params: {
+	name?: string;
+	groups?: string;
+}): Promise<Routing> {
+	const native = await addon.routing(params);
+	Object.defineProperty(native, "sourceName", {
+		configurable: true,
+		value: native.sourcename,
+	});
+	return native;
+}
 
 // Re-export enums and timing constants for convenient named imports
 export {
@@ -341,7 +338,7 @@ const grandi: Grandi = {
 	destroy,
 	send,
 	receive,
-	framesync,
+	frameSync,
 	routing,
 	find,
 	ColorFormat,
@@ -350,41 +347,6 @@ const grandi: Grandi = {
 	FrameType,
 	FourCC,
 	TIMECODE_SYNTHESIZE,
-	COLOR_FORMAT_BGRX_BGRA: ColorFormat.BGRX_BGRA,
-	COLOR_FORMAT_UYVY_BGRA: ColorFormat.UYVY_BGRA,
-	COLOR_FORMAT_RGBX_RGBA: ColorFormat.RGBX_RGBA,
-	COLOR_FORMAT_UYVY_RGBA: ColorFormat.UYVY_RGBA,
-	COLOR_FORMAT_FASTEST: ColorFormat.Fastest,
-	COLOR_FORMAT_BEST: ColorFormat.Best,
-	COLOR_FORMAT_BGRX_BGRA_FLIPPED: ColorFormat.BGRX_BGRA_FLIPPED,
-
-	BANDWIDTH_METADATA_ONLY: Bandwidth.MetadataOnly,
-	BANDWIDTH_AUDIO_ONLY: Bandwidth.AudioOnly,
-	BANDWIDTH_LOWEST: Bandwidth.Lowest,
-	BANDWIDTH_HIGHEST: Bandwidth.Highest,
-
-	FORMAT_TYPE_PROGRESSIVE: FrameType.Progressive,
-	FORMAT_TYPE_INTERLACED: FrameType.Interlaced,
-	FORMAT_TYPE_FIELD_0: FrameType.Field0,
-	FORMAT_TYPE_FIELD_1: FrameType.Field1,
-
-	AUDIO_FORMAT_FLOAT_32_SEPARATE: AudioFormat.Float32Separate,
-	AUDIO_FORMAT_FLOAT_32_INTERLEAVED: AudioFormat.Float32Interleaved,
-	AUDIO_FORMAT_INT_16_INTERLEAVED: AudioFormat.Int16Interleaved,
-
-	// FourCC helpers/constants
-	FOURCC_UYVY: FourCC.UYVY,
-	FOURCC_UYVA: FourCC.UYVA,
-	FOURCC_P216: FourCC.P216,
-	FOURCC_PA16: FourCC.PA16,
-	FOURCC_YV12: FourCC.YV12,
-	FOURCC_I420: FourCC.I420,
-	FOURCC_NV12: FourCC.NV12,
-	FOURCC_BGRA: FourCC.BGRA,
-	FOURCC_BGRX: FourCC.BGRX,
-	FOURCC_RGBA: FourCC.RGBA,
-	FOURCC_RGBX: FourCC.RGBX,
-	FOURCC_FLTp: FourCC.FLTp,
 };
 
 export default grandi;

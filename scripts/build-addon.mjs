@@ -38,73 +38,22 @@ const cli = parseArgs(process.argv);
 const targetPlatform = cli.platform ?? platform;
 const targetArch = cli.arch ?? arch;
 const targetKey = `${targetPlatform}-${targetArch}`;
-const TARGETS = {
-	"linux-x64": {
-		pkgDir: "packages/linux-x64",
-		gypArch: "x64",
-		sources: [
-			"ndi/lib/lnx-x64/libndi.so.6",
-			"ndi/lib/LICENSE",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-	"linux-arm64": {
-		pkgDir: "packages/linux-arm64",
-		gypArch: "arm64",
-		sources: [
-			"ndi/lib/lnx-arm64/libndi.so.6",
-			"ndi/lib/LICENSE",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-	"linux-arm": {
-		pkgDir: "packages/linux-armv7l",
-		gypArch: "arm",
-		sources: [
-			"ndi/lib/lnx-armv7l/libndi.so.6",
-			"ndi/lib/LICENSE",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-	"win32-x64": {
-		pkgDir: "packages/win32-x64",
-		gypArch: "x64",
-		sources: [
-			"ndi/lib/win-x64/Processing.NDI.Lib.x64.dll",
-			"ndi/lib/win-x64/Processing.NDI.Lib.x64.lib",
-			"ndi/lib/LICENSE.pdf",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-	"win32-ia32": {
-		pkgDir: "packages/win32-ia32",
-		gypArch: "ia32",
-		sources: [
-			"ndi/lib/win-x86/Processing.NDI.Lib.x86.dll",
-			"ndi/lib/win-x86/Processing.NDI.Lib.x86.lib",
-			"ndi/lib/LICENSE.pdf",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-	"darwin-arm64": {
-		pkgDir: "packages/darwin-arm64",
-		gypArch: "arm64",
-		sources: [
-			"ndi/lib/macOS/libndi.dylib",
-			"ndi/lib/LICENSE.pdf",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-	"darwin-x64": {
-		pkgDir: "packages/darwin-x64",
-		gypArch: "x64",
-		sources: [
-			"ndi/lib/macOS/libndi.dylib",
-			"ndi/lib/LICENSE.pdf",
-			"ndi/lib/libndi_licenses.txt",
-		],
-	},
-};
+const platformTargets = JSON.parse(
+	fsSync.readFileSync(
+		new URL("../src/platforms.json", import.meta.url),
+		"utf8",
+	),
+);
+const TARGETS = Object.fromEntries(
+	platformTargets.map((target) => [
+		target.key,
+		{
+			pkgDir: target.packageDir,
+			gypArch: target.gypArch,
+			sources: target.sources,
+		},
+	]),
+);
 const supportsColor = process.stdout.isTTY && process.env.NO_COLOR !== "1";
 const isInteractiveTerminal = process.stdout.isTTY && process.env.CI !== "true";
 
