@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/oxfmt/configuration_schema.json",
-	"ignorePatterns": ["**/*.md", "**/*.yaml", "**/*.yml", "lib/.clang-format"],
+	"ignorePatterns": ["lib/.clang-format"],
 	"printWidth": 80,
 	"useTabs": true,
 	"singleQuote": false,
