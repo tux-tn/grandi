@@ -100,6 +100,10 @@ jobs:
         with:
           node-version: ${{ matrix.nodeVersion }}
 
+      - name: Upgrade npm on Windows x86
+        if: matrix.nodeArchitecture == 'x86'
+        run: npm install --global npm@11.18.0
+
       - name: Install dependencies
         if: ${{ !matrix.dockerImage }}
         run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
