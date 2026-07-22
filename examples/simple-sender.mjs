@@ -58,8 +58,8 @@ async function main() {
 				sender.audio({
 					type: "audio",
 					sampleRate: SAMPLE_RATE,
-					noChannels: CHANNELS,
-					noSamples: SAMPLES_PER_FRAME,
+					channels: CHANNELS,
+					samples: SAMPLES_PER_FRAME,
 					channelStrideBytes: CHANNEL_STRIDE_BYTES,
 					data: SILENT_AUDIO,
 					fourCC: grandi.FourCC.FLTp,

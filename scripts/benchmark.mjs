@@ -243,8 +243,8 @@ async function main() {
 		const audioFrame = {
 			type: "audio",
 			sampleRate: 48_000,
-			noChannels: 2,
-			noSamples: samplesPerFrame,
+			channels: 2,
+			samples: samplesPerFrame,
 			channelStrideBytes: samplesPerFrame * 4,
 			data: audioBuffer,
 			fourCC: grandi.FOURCC_FLTp,

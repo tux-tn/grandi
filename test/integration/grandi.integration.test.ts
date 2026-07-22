@@ -60,8 +60,8 @@ async function pumpFrames(
 		await sender.audio({
 			type: "audio",
 			sampleRate: 48_000,
-			noChannels: 2,
-			noSamples: samplesPerFrame,
+			channels: 2,
+			samples: samplesPerFrame,
 			channelStrideBytes: samplesPerFrame * 4,
 			data: audioBuffer,
 			fourCC: grandi.FourCC.FLTp,
@@ -283,6 +283,27 @@ describe("grandi native addon (integration)", () => {
 			await expect(
 				sender.video({ ...frame, timecode: 1 } as never),
 			).rejects.toThrow("timecode value must be a bigint");
+		} finally {
+			sender.destroy();
+		}
+	}, 30_000);
+	test("accepts deprecated sender audio field names", async () => {
+		const sender = await grandi.send({
+			name: `grandi-deprecated-audio-fields-${Date.now()}`,
+		});
+
+		try {
+			await expect(
+				sender.audio({
+					type: "audio",
+					sampleRate: 48_000,
+					noChannels: 2,
+					noSamples: 1600,
+					channelStrideBytes: 1600 * 4,
+					data: Buffer.alloc(1600 * 4 * 2),
+					fourCC: grandi.FourCC.FLTp,
+				}),
+			).resolves.toEqual({});
 		} finally {
 			sender.destroy();
 		}
