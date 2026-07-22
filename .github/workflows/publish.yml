@@ -158,7 +158,7 @@ jobs:
           merge-multiple: true
 
       - name: Install dependencies
-        run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Build package
         run: npm run build
