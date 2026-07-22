@@ -464,22 +464,82 @@ export interface Grandi {
 	 * Enum: receiver video color formats.
 	 */
 	ColorFormat: typeof ColorFormat;
+	/** @deprecated Use `ColorFormat.BGRX_BGRA` instead. */
+	COLOR_FORMAT_BGRX_BGRA: ColorFormat.BGRX_BGRA;
+	/** @deprecated Use `ColorFormat.UYVY_BGRA` instead. */
+	COLOR_FORMAT_UYVY_BGRA: ColorFormat.UYVY_BGRA;
+	/** @deprecated Use `ColorFormat.RGBX_RGBA` instead. */
+	COLOR_FORMAT_RGBX_RGBA: ColorFormat.RGBX_RGBA;
+	/** @deprecated Use `ColorFormat.UYVY_RGBA` instead. */
+	COLOR_FORMAT_UYVY_RGBA: ColorFormat.UYVY_RGBA;
+	/** @deprecated Use `ColorFormat.Fastest` instead. */
+	COLOR_FORMAT_FASTEST: ColorFormat.Fastest;
+	/** @deprecated Use `ColorFormat.Best` instead. */
+	COLOR_FORMAT_BEST: ColorFormat.Best;
+	/** @deprecated Use `ColorFormat.BGRX_BGRA_FLIPPED` instead. */
+	COLOR_FORMAT_BGRX_BGRA_FLIPPED: ColorFormat.BGRX_BGRA_FLIPPED;
 	/**
 	 * Enum: supported raw audio formats for helpers/receive conversions.
 	 */
 	AudioFormat: typeof AudioFormat;
+	/** @deprecated Use `AudioFormat.Float32Separate` instead. */
+	AUDIO_FORMAT_FLOAT_32_SEPARATE: AudioFormat.Float32Separate;
+	/** @deprecated Use `AudioFormat.Float32Interleaved` instead. */
+	AUDIO_FORMAT_FLOAT_32_INTERLEAVED: AudioFormat.Float32Interleaved;
+	/** @deprecated Use `AudioFormat.Int16Interleaved` instead. */
+	AUDIO_FORMAT_INT_16_INTERLEAVED: AudioFormat.Int16Interleaved;
 	/**
 	 * Enum: receiver bandwidth modes.
 	 */
 	Bandwidth: typeof Bandwidth;
+	/** @deprecated Use `Bandwidth.MetadataOnly` instead. */
+	BANDWIDTH_METADATA_ONLY: Bandwidth.MetadataOnly;
+	/** @deprecated Use `Bandwidth.AudioOnly` instead. */
+	BANDWIDTH_AUDIO_ONLY: Bandwidth.AudioOnly;
+	/** @deprecated Use `Bandwidth.Lowest` instead. */
+	BANDWIDTH_LOWEST: Bandwidth.Lowest;
+	/** @deprecated Use `Bandwidth.Highest` instead. */
+	BANDWIDTH_HIGHEST: Bandwidth.Highest;
 	/**
 	 * Enum: video frame format types (progressive/interlaced/fields).
 	 */
 	FrameType: typeof FrameType;
+	/** @deprecated Use `FrameType.Progressive` instead. */
+	FORMAT_TYPE_PROGRESSIVE: FrameType.Progressive;
+	/** @deprecated Use `FrameType.Interlaced` instead. */
+	FORMAT_TYPE_INTERLACED: FrameType.Interlaced;
+	/** @deprecated Use `FrameType.Field0` instead. */
+	FORMAT_TYPE_FIELD_0: FrameType.Field0;
+	/** @deprecated Use `FrameType.Field1` instead. */
+	FORMAT_TYPE_FIELD_1: FrameType.Field1;
 	/**
 	 * Enum: FourCC pixel/audio formats used in frames.
 	 */
 	FourCC: typeof FourCC;
+	/** @deprecated Use `FourCC.UYVY` instead. */
+	FOURCC_UYVY: FourCC.UYVY;
+	/** @deprecated Use `FourCC.UYVA` instead. */
+	FOURCC_UYVA: FourCC.UYVA;
+	/** @deprecated Use `FourCC.P216` instead. */
+	FOURCC_P216: FourCC.P216;
+	/** @deprecated Use `FourCC.PA16` instead. */
+	FOURCC_PA16: FourCC.PA16;
+	/** @deprecated Use `FourCC.YV12` instead. */
+	FOURCC_YV12: FourCC.YV12;
+	/** @deprecated Use `FourCC.I420` instead. */
+	FOURCC_I420: FourCC.I420;
+	/** @deprecated Use `FourCC.NV12` instead. */
+	FOURCC_NV12: FourCC.NV12;
+	/** @deprecated Use `FourCC.BGRA` instead. */
+	FOURCC_BGRA: FourCC.BGRA;
+	/** @deprecated Use `FourCC.BGRX` instead. */
+	FOURCC_BGRX: FourCC.BGRX;
+	/** @deprecated Use `FourCC.RGBA` instead. */
+	FOURCC_RGBA: FourCC.RGBA;
+	/** @deprecated Use `FourCC.RGBX` instead. */
+	FOURCC_RGBX: FourCC.RGBX;
+	/** @deprecated Use `FourCC.FLTp` instead. */
+	FOURCC_FLTp: FourCC.FLTp;
 	/**
 	 * NDI sentinel that asks the SDK to synthesize the timecode.
 	 *
