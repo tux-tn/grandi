@@ -170,7 +170,7 @@ jobs:
           mkdir -p release-assets
           npm pack --pack-destination release-assets
           for package_dir in packages/*; do
-            npm pack "$package_dir" --pack-destination release-assets
+            npm pack "./$package_dir" --pack-destination release-assets
           done
           sha256sum release-assets/*.tgz > release-assets/SHA256SUMS
 
@@ -187,7 +187,7 @@ jobs:
         run: |
           set -euo pipefail
           for package_dir in packages/*; do
-            npm publish "$package_dir" --provenance --access public
+            npm publish "./$package_dir" --provenance --access public
           done
 
       - name: Publish root package
