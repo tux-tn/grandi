@@ -108,6 +108,7 @@ function loadAddon(): GrandiAddon {
 	throw new Error("Failed to load native addon");
 }
 
+/** @internal Native addon contract used by the JavaScript wrapper. */
 export interface GrandiAddon {
 	version(): string;
 	isSupportedCPU(): boolean;
@@ -171,7 +172,13 @@ const addon: GrandiAddon = loadAddon();
  * ```
  */
 export function find(params: FindOptions = {}): Promise<Finder> {
-	return addon.find(params);
+	const { extraIPs, extraIps, ...options } = params;
+	const normalizedExtraIps = extraIPs ?? extraIps;
+	return addon.find(
+		normalizedExtraIps === undefined
+			? options
+			: { ...options, extraIPs: normalizedExtraIps },
+	);
 }
 // Named runtime exports
 /**
@@ -312,15 +319,20 @@ export type {
 	FrameSync,
 	FrameSyncAudioFormat,
 	FrameSyncAudioOptions,
+	FrameSyncAudioOptionsBase,
 	Grandi,
 	ReceivedAudioFrame,
 	ReceivedMetadataFrame,
 	ReceivedVideoFrame,
 	ReceiveOptions,
 	ReceiverDataFrame,
+	Receiver,
+	ReceiverPerformance,
+	ReceiverQueue,
 	ReceiverTallyState,
 	Routing,
 	Sender,
+	SendOptions,
 	SenderTally,
 	Source,
 	SourceChangeEvent,

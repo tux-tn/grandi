@@ -59,6 +59,11 @@ export type VideoFourCC =
 
 export type AudioFourCC = FourCC.FLTp;
 
+/**
+ * NDI sentinel that asks the SDK to generate synthesized timecode.
+ *
+ * @see [Synthesized timecode in the NDI SDK documentation](https://docs.ndi.video/all/getting-started/white-paper/time-timecode-and-sync-for-ndi#synthesized-timecode)
+ */
 export const TIMECODE_SYNTHESIZE = 9223372036854775807n;
 export type Timecode = bigint;
 
@@ -90,17 +95,38 @@ export interface ReceivedVideoFrame extends VideoFrame {
 	metadata?: string;
 }
 
-export interface AudioFrame {
+export type AudioFrame = {
 	type?: "audio";
 	sampleRate: number;
-	noChannels: number;
-	noSamples: number;
 	channelStrideBytes: number;
 	data: Buffer;
 	fourCC: AudioFourCC;
 	timecode?: Timecode;
 	metadata?: string;
-}
+} & (
+	| {
+			channels: number;
+			/** @deprecated Use `channels` instead. */
+			noChannels?: number;
+	  }
+	| {
+			channels?: number;
+			/** @deprecated Use `channels` instead. */
+			noChannels: number;
+	  }
+) &
+	(
+		| {
+				samples: number;
+				/** @deprecated Use `samples` instead. */
+				noSamples?: number;
+		  }
+		| {
+				samples?: number;
+				/** @deprecated Use `samples` instead. */
+				noSamples: number;
+		  }
+	);
 
 export interface ReceivedAudioFrame {
 	type: "audio";
@@ -227,7 +253,7 @@ export interface Routing {
 	sourcename(): string;
 }
 
-interface FrameSyncAudioOptionsBase {
+export interface FrameSyncAudioOptionsBase {
 	sampleRate?: number;
 	channels?: number;
 	/** @deprecated Use `channels` instead. */
@@ -286,8 +312,8 @@ export interface Finder {
 export interface FindOptions {
 	showLocalSources?: boolean;
 	groups?: string;
+	/** @deprecated Use `extraIPs` instead. */
 	extraIps?: string;
-	/** @deprecated Use `extraIps` instead. */
 	extraIPs?: string;
 }
 
@@ -456,6 +482,8 @@ export interface Grandi {
 	FourCC: typeof FourCC;
 	/**
 	 * NDI sentinel that asks the SDK to synthesize the timecode.
+	 *
+	 * @see [Synthesized timecode in the NDI SDK documentation](https://docs.ndi.video/all/getting-started/white-paper/time-timecode-and-sync-for-ndi#synthesized-timecode)
 	 */
 	TIMECODE_SYNTHESIZE: bigint;
 }

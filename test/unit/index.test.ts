@@ -230,6 +230,11 @@ describe("src/index entrypoint", () => {
 		await grandi.find(findOpts);
 		expect(addon.find).toHaveBeenLastCalledWith(findOpts);
 
+		await grandi.find({ extraIps: "127.0.0.2" });
+		expect(addon.find).toHaveBeenLastCalledWith({
+			extraIPs: "127.0.0.2",
+		});
+
 		grandi.initialize();
 		expect(addon.initialize).toHaveBeenCalled();
 		grandi.destroy();

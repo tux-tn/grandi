@@ -234,7 +234,7 @@ bool validateAudioFrameBuffer(const NDIlib_audio_frame_v3_t &frame,
                               size_t bufferLen, carrier *c) {
   if (frame.sample_rate <= 0 || frame.no_channels <= 0 ||
       frame.no_samples <= 0) {
-    c->errorMsg = "sampleRate, noChannels, and noSamples must be positive.";
+    c->errorMsg = "sampleRate, channels, and samples must be positive.";
     c->status = GRANDI_INVALID_ARGS;
     return false;
   }
@@ -832,22 +832,34 @@ napi_value audioSend(napi_env env, napi_callback_info info) {
     c->status = napi_get_value_int32(env, param, &c->audioFrame.sample_rate);
     REJECT_RETURN;
 
-    c->status = napi_get_named_property(env, config, "noChannels", &param);
+    c->status = napi_get_named_property(env, config, "channels", &param);
     REJECT_RETURN;
     c->status = napi_typeof(env, param, &type);
     REJECT_RETURN;
+    if (type == napi_undefined) {
+      c->status = napi_get_named_property(env, config, "noChannels", &param);
+      REJECT_RETURN;
+      c->status = napi_typeof(env, param, &type);
+      REJECT_RETURN;
+    }
     if (type != napi_number)
-      REJECT_ERROR_RETURN("noChannels value must be a number",
+      REJECT_ERROR_RETURN("channels or noChannels value must be a number",
                           GRANDI_INVALID_ARGS);
     c->status = napi_get_value_int32(env, param, &c->audioFrame.no_channels);
     REJECT_RETURN;
 
-    c->status = napi_get_named_property(env, config, "noSamples", &param);
+    c->status = napi_get_named_property(env, config, "samples", &param);
     REJECT_RETURN;
     c->status = napi_typeof(env, param, &type);
     REJECT_RETURN;
+    if (type == napi_undefined) {
+      c->status = napi_get_named_property(env, config, "noSamples", &param);
+      REJECT_RETURN;
+      c->status = napi_typeof(env, param, &type);
+      REJECT_RETURN;
+    }
     if (type != napi_number)
-      REJECT_ERROR_RETURN("Samples value must be a number",
+      REJECT_ERROR_RETURN("samples or noSamples value must be a number",
                           GRANDI_INVALID_ARGS);
     c->status = napi_get_value_int32(env, param, &c->audioFrame.no_samples);
     REJECT_RETURN;
