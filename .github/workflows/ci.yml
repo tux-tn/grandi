@@ -1,9 +1,10 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
-      - main
+      - "**"
   pull_request:
     branches:
       - main
@@ -12,47 +13,85 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Install avahi-daemon on Linux
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y avahi-daemon libavahi-common3 libavahi-client3
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.19.5"
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Type check TypeScript sources
         run: npm exec -- tsc --noEmit -p tsconfig.json
 
-      - name: Check Oxfmt formatting
+      - name: Check formatting
         run: npm run format
 
-      - name: Lint with Oxlint
+      - name: Lint
         run: npm run lint
 
-      - name: Build package typescript sources
+      - name: Build package
         run: npm run build
-
-      - name: Build native addon
-        run: npm run build:addon
 
       - name: Run unit tests
         run: npm run test:unit
 
+  native:
+    name: Native ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: macos-26-intel
+            platform: darwin
+            arch: x64
+          - os: windows-latest
+            platform: win32
+            arch: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y avahi-daemon libavahi-common3 libavahi-client3
+          sudo dbus-daemon --system --fork 2>/dev/null || true
+          sudo avahi-daemon --daemonize --no-chroot 2>/dev/null || true
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build native addon
+        run: node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+
       - name: Run integration tests
         run: npm run test:integration
-
