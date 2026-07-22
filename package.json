@@ -63,7 +63,8 @@
 		"tmp": "0.2.7",
 		"tsdown": "^0.22.4",
 		"typescript": "^7.0.2",
-		"vitest": "^4.1.10"
+		"vitest": "^4.1.10",
+		"yaml": "^2.8.1"
 	},
 	"scripts": {
 		"bench": "node --expose-gc scripts/benchmark.mjs",
@@ -80,7 +81,8 @@
 		"test:coverage": "vitest run --coverage",
 		"test:integration": "vitest run test/integration",
 		"test:unit": "vitest run test/unit",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"validate:platforms": "node scripts/validate-platforms.mjs"
 	},
 	"engines": {
 		"node": ">=20.19.5"

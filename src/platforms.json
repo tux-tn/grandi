@@ -1,0 +1,95 @@
+[
+	{
+		"key": "linux-x64",
+		"platform": "linux",
+		"arch": "x64",
+		"gypArch": "x64",
+		"packageName": "@grandi/linux-x64",
+		"packageDir": "packages/linux-x64",
+		"sources": [
+			"ndi/lib/lnx-x64/libndi.so.6",
+			"ndi/lib/LICENSE",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	},
+	{
+		"key": "linux-arm64",
+		"platform": "linux",
+		"arch": "arm64",
+		"gypArch": "arm64",
+		"packageName": "@grandi/linux-arm64",
+		"packageDir": "packages/linux-arm64",
+		"sources": [
+			"ndi/lib/lnx-arm64/libndi.so.6",
+			"ndi/lib/LICENSE",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	},
+	{
+		"key": "linux-arm",
+		"platform": "linux",
+		"arch": "arm",
+		"gypArch": "arm",
+		"packageName": "@grandi/linux-armv7l",
+		"packageDir": "packages/linux-armv7l",
+		"sources": [
+			"ndi/lib/lnx-armv7l/libndi.so.6",
+			"ndi/lib/LICENSE",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	},
+	{
+		"key": "win32-x64",
+		"platform": "win32",
+		"arch": "x64",
+		"gypArch": "x64",
+		"packageName": "@grandi/win32-x64",
+		"packageDir": "packages/win32-x64",
+		"sources": [
+			"ndi/lib/win-x64/Processing.NDI.Lib.x64.dll",
+			"ndi/lib/win-x64/Processing.NDI.Lib.x64.lib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	},
+	{
+		"key": "win32-ia32",
+		"platform": "win32",
+		"arch": "ia32",
+		"gypArch": "ia32",
+		"packageName": "@grandi/win32-ia32",
+		"packageDir": "packages/win32-ia32",
+		"sources": [
+			"ndi/lib/win-x86/Processing.NDI.Lib.x86.dll",
+			"ndi/lib/win-x86/Processing.NDI.Lib.x86.lib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	},
+	{
+		"key": "darwin-arm64",
+		"platform": "darwin",
+		"arch": "arm64",
+		"gypArch": "arm64",
+		"packageName": "@grandi/darwin-arm64",
+		"packageDir": "packages/darwin-arm64",
+		"sources": [
+			"ndi/lib/macOS/libndi.dylib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	},
+	{
+		"key": "darwin-x64",
+		"platform": "darwin",
+		"arch": "x64",
+		"gypArch": "x64",
+		"packageName": "@grandi/darwin-x64",
+		"packageDir": "packages/darwin-x64",
+		"sources": [
+			"ndi/lib/macOS/libndi.dylib",
+			"ndi/lib/LICENSE.pdf",
+			"ndi/lib/libndi_licenses.txt"
+		]
+	}
+]
