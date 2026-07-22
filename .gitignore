@@ -9,6 +9,9 @@ yarn.lock
 pnpm-lock.yaml
 pnpm-workspace.yaml
 coverage
+docs/api
+docs/.vitepress/cache
+docs/.vitepress/dist
 packages/**
 !packages/
 !packages/**/
