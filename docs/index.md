@@ -1,12 +1,12 @@
 ---
 layout: home
 
-title: Grandi — NDI for Node.js
+title: Grandi
 titleTemplate: false
 
 hero:
   name: Grandi
-  text: NDI for Node.js
+  text: Node.js bindings for NDI
   tagline: Typed APIs for NDI 6 discovery, receiving, sending, routing, and synchronization.
   actions:
     - theme: brand

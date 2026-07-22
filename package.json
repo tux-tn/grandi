@@ -1,6 +1,6 @@
 {
 	"name": "grandi",
-	"version": "1.3.1",
+	"version": "2.0.0",
 	"description": "TypeScript-first native Node.js bindings to the NDI SDK.",
 	"homepage": "https://tux-tn.github.io/grandi/",
 	"keywords": [
@@ -34,13 +34,13 @@
 		"url": "https://github.com/tux-tn/grandi/issues"
 	},
 	"optionalDependencies": {
-		"@grandi/darwin-arm64": "1.3.1",
-		"@grandi/darwin-x64": "1.3.1",
-		"@grandi/linux-arm64": "1.3.1",
-		"@grandi/linux-armv7l": "1.3.1",
-		"@grandi/linux-x64": "1.3.1",
-		"@grandi/win32-ia32": "1.3.1",
-		"@grandi/win32-x64": "1.3.1"
+		"@grandi/darwin-arm64": "2.0.0",
+		"@grandi/darwin-x64": "2.0.0",
+		"@grandi/linux-arm64": "2.0.0",
+		"@grandi/linux-armv7l": "2.0.0",
+		"@grandi/linux-x64": "2.0.0",
+		"@grandi/win32-ia32": "2.0.0",
+		"@grandi/win32-x64": "2.0.0"
 	},
 	"dependencies": {
 		"node-gyp-build": "^4.8.4"
