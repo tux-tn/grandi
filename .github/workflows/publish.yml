@@ -1,34 +1,244 @@
-name: Publish
+name: Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish to npm
+  validate:
+    name: Validate release version
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
 
-      - name: Install dependencies
-        run: npm install
+      - name: Validate package versions
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
 
-      - name: bundle typescript sources
+          const tag = process.env.GITHUB_REF_NAME;
+          if (!/^v\d+\.\d+\.\d+$/.test(tag)) {
+            throw new Error(`Invalid release tag: ${tag}`);
+          }
+
+          const version = tag.slice(1);
+          const packagePaths = [
+            "package.json",
+            ...fs
+              .readdirSync("packages", { withFileTypes: true })
+              .filter((entry) => entry.isDirectory())
+              .map((entry) => path.join("packages", entry.name, "package.json")),
+          ];
+
+          for (const packagePath of packagePaths) {
+            const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+            if (packageJson.version !== version) {
+              throw new Error(
+                `${packagePath} has version ${packageJson.version}; expected ${version}`,
+              );
+            }
+          }
+          NODE
+
+  build-addon:
+    name: Build ${{ matrix.platform }}-${{ matrix.arch }}
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            pkgDir: packages/linux-x64
+            nodeVersion: "24"
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            pkgDir: packages/linux-arm64
+            dockerImage: ghcr.io/prebuild/linux-arm64
+            nodeVersion: "24"
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm
+            pkgDir: packages/linux-armv7l
+            dockerImage: ghcr.io/prebuild/linux-armv7
+            nodeVersion: "24"
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            pkgDir: packages/win32-x64
+            nodeVersion: "24"
+          - os: windows-latest
+            platform: win32
+            arch: ia32
+            pkgDir: packages/win32-ia32
+            nodeVersion: "20"
+            nodeArchitecture: x86
+          - os: macos-26-intel
+            platform: darwin
+            arch: x64
+            pkgDir: packages/darwin-x64
+            nodeVersion: "24"
+          - os: macos-26-intel
+            platform: darwin
+            arch: arm64
+            pkgDir: packages/darwin-arm64
+            nodeVersion: "24"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js x86
+        if: matrix.nodeArchitecture == 'x86'
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.nodeVersion }}
+          architecture: x86
+
+      - name: Setup Node.js
+        if: matrix.nodeArchitecture != 'x86'
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.nodeVersion }}
+
+      - name: Install dependencies
+        if: ${{ !matrix.dockerImage }}
+        run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
+
+      - name: Build native addon on host
+        if: ${{ !matrix.dockerImage }}
+        run: node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+
+      - name: Build native addon in Docker
+        if: ${{ matrix.dockerImage }}
+        shell: bash
+        run: |
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -e npm_config_cache=/tmp/npm-cache \
+            -e NPM_CONFIG_CACHE=/tmp/npm-cache \
+            -v "$PWD:/input" \
+            -w /input \
+            "${{ matrix.dockerImage }}" \
+            /bin/bash -lc \
+            "npm install --ignore-scripts --omit=optional --no-audit --no-fund && \
+             node scripts/build-addon.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}"
+
+      - name: Stage package artifact
+        shell: bash
+        run: |
+          mkdir -p "artifact/${{ matrix.pkgDir }}"
+          cp -a "${{ matrix.pkgDir }}/." "artifact/${{ matrix.pkgDir }}/"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: addon-${{ matrix.platform }}-${{ matrix.arch }}
+          path: artifact
+          if-no-files-found: error
+          retention-days: 7
+
+
+  publish:
+    name: Publish npm packages
+    needs: build-addon
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+
+      - name: Download addon artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: addon-*
+          path: .
+          merge-multiple: true
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --omit=optional --no-audit --no-fund
+
+      - name: Build package
         run: npm run build
 
-      - name: Publish package
-        run: npm publish --provenance  --access public
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          npm pack --pack-destination release-assets
+          for package_dir in packages/*; do
+            npm pack "$package_dir" --pack-destination release-assets
+          done
+          sha256sum release-assets/*.tgz > release-assets/SHA256SUMS
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets
+          path: release-assets
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Publish addon packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for package_dir in packages/*; do
+            npm publish "$package_dir" --provenance --access public
+          done
+
+      - name: Publish root package
+        run: npm publish --provenance --access public
+
+  release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            release-assets/*.tgz \
+            release-assets/SHA256SUMS \
+            --title "Grandi ${GITHUB_REF_NAME}" \
+            --generate-notes
